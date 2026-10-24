@@ -1,0 +1,6268 @@
+<title>小朋友下樓梯</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Noto+Sans+TC:wght@400;700;900&display=swap">
+<style>
+/* 版面概念：一口垂直豎井。畫布置中填滿高度，所有選單都是浮在井口上的石板面板。 */
+:root {
+  --shaft: #17142e;
+  --shaft-deep: #0e0c1f;
+  --panel: rgba(23, 20, 46, 0.94);
+  --line: #3a3466;
+  --ink: #f4f0ff;
+  --ink-dim: #a49ccf;
+  --kid: #ffb547;
+  --kid-dark: #d9821c;
+  --stone: #7fd6c8;
+  --spike: #ff5d6c;
+  --glow: #6dff9e;
+
+  --font-display: "Bungee", "Noto Sans TC", system-ui, sans-serif;
+  --font-body: "Noto Sans TC", system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--shaft-deep);
+  color: var(--ink);
+  font-family: var(--font-body);
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px)
+    env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  background:
+    repeating-linear-gradient(90deg, transparent 0 26px, rgba(44, 39, 86, 0.25) 26px 27px),
+    var(--shaft-deep);
+}
+
+#stage {
+  position: relative;
+  overflow: hidden;
+  background: var(--shaft);
+  box-shadow: 0 0 0 1px var(--line), 0 20px 60px rgba(0, 0, 0, 0.5);
+  --ui-scale: 1;
+}
+
+#game {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  -ms-touch-action: none;
+}
+
+/* ───────── 遊玩中的 HUD 按鈕 ───────── */
+#hud-buttons {
+  position: absolute;
+  top: calc(4px * var(--ui-scale));
+  right: calc(6px * var(--ui-scale));
+  display: flex;
+  gap: calc(6px * var(--ui-scale));
+}
+
+.hud-btn {
+  width: calc(36px * var(--ui-scale));
+  height: calc(32px * var(--ui-scale));
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(244, 240, 255, 0.22);
+  border-radius: 8px;
+  background: rgba(244, 240, 255, 0.1);
+  color: var(--ink);
+  font-size: calc(16px * var(--ui-scale));
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.hud-btn:active {
+  background: rgba(255, 181, 71, 0.35);
+}
+
+#btn-calibrate {
+  opacity: 0.75;
+}
+
+/* ───────── Toast ───────── */
+#toast {
+  position: absolute;
+  left: 50%;
+  top: calc(76px * var(--ui-scale));
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(14, 12, 31, 0.88);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  font-size: calc(13px * var(--ui-scale));
+  font-weight: 700;
+  text-align: center;
+  pointer-events: none;
+  animation: toast-in 0.18s ease-out;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+}
+
+/* ───────── 選單畫面 ───────── */
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px;
+  background: rgba(14, 12, 31, 0.55);
+  font-size: calc(15px * var(--ui-scale));
+}
+
+.screen-title {
+  background: linear-gradient(180deg, rgba(14, 12, 31, 0.2), rgba(14, 12, 31, 0.75) 60%);
+  padding-bottom: calc(28px * var(--ui-scale));
+}
+
+/* 面板置中；內容比畫面高時自然往下捲，不會被釘在頂端擋住視線 */
+.screen > .panel {
+  margin: auto;
+}
+
+.screen-title > .panel {
+  margin: auto 0 0;
+}
+
+.panel {
+  position: relative;
+  flex: none;
+  width: min(100%, 22em);
+  display: flex;
+  flex-direction: column;
+  gap: 1em;
+  padding: 1.4em 1.2em;
+  border-radius: 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: 0 -4px 0 var(--stone) inset, 0 18px 40px rgba(0, 0, 0, 0.45);
+}
+
+.screen-title .panel {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding-inline: 0.4em;
+}
+
+/* 右上角半透明關閉鈕 */
+.panel-close {
+  position: absolute;
+  top: 0.5em;
+  right: 0.5em;
+  width: 2.4em;
+  height: 2.4em;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(244, 240, 255, 0.2);
+  border-radius: 50%;
+  background: rgba(244, 240, 255, 0.1);
+  color: var(--ink);
+  font: 700 1em/1 var(--font-body);
+  opacity: 0.7;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.panel-close:hover,
+.panel-close:focus-visible {
+  opacity: 1;
+}
+
+.panel-close:active {
+  background: rgba(255, 181, 71, 0.35);
+}
+
+.panel-close:focus-visible {
+  outline: 2px solid var(--glow);
+  outline-offset: 2px;
+}
+
+.panel h2 {
+  padding-right: 2.2em;
+}
+
+.screen-modal {
+  z-index: 20;
+  background: rgba(14, 12, 31, 0.78);
+}
+
+.panel-confirm {
+  gap: 1.2em;
+}
+
+.confirm-message {
+  margin: 0;
+  line-height: 1.6;
+  font-weight: 700;
+  white-space: pre-line;
+}
+
+.confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6em;
+}
+
+.btn-small {
+  min-height: 2.4em;
+  padding: 0.4em 1em;
+}
+
+h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 1.5em;
+  letter-spacing: 0.04em;
+}
+
+.eyebrow {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.78em;
+  letter-spacing: 0.18em;
+  color: var(--kid);
+}
+
+/* 標題字一階一階往下，像踩著樓梯 */
+.logo {
+  margin: 0 0 0.4em;
+  display: flex;
+  font-family: var(--font-body);
+  font-weight: 900;
+  font-size: 2.6em;
+  line-height: 1;
+}
+
+.logo span {
+  display: inline-block;
+  padding: 0 0.04em 0.12em;
+  transform: translateY(calc(var(--i) * 0.16em));
+  border-bottom: 0.12em solid var(--stone);
+  animation: step-in 0.5s calc(var(--i) * 60ms) ease-out both;
+}
+
+.logo span:nth-child(5) {
+  border-bottom-color: var(--spike);
+}
+
+@keyframes step-in {
+  from {
+    transform: translateY(calc(var(--i) * 0.16em - 0.5em));
+    opacity: 0.2;
+  }
+}
+
+.rules {
+  margin: 0;
+  color: var(--ink-dim);
+  line-height: 1.6;
+  font-size: 0.92em;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6em;
+}
+
+.btn {
+  min-height: 3em;
+  padding: 0.6em 1em;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(244, 240, 255, 0.06);
+  color: var(--ink);
+  font: 700 1em/1.2 var(--font-body);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.btn:active {
+  transform: translateY(2px);
+}
+
+.btn-primary {
+  border-color: var(--kid-dark);
+  background: var(--kid);
+  color: #2a1606;
+  box-shadow: 0 4px 0 var(--kid-dark);
+}
+
+.btn-primary:active {
+  box-shadow: 0 2px 0 var(--kid-dark);
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ink-dim);
+}
+
+.btn:focus-visible,
+.hud-btn:focus-visible,
+.mode-option input:focus-visible + .mode-card,
+input:focus-visible {
+  outline: 2px solid var(--glow);
+  outline-offset: 2px;
+}
+
+.meta {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8em;
+}
+
+.meta div {
+  min-width: 0;
+}
+
+.meta dt {
+  font-size: 0.75em;
+  color: var(--ink-dim);
+  letter-spacing: 0.08em;
+}
+
+.meta dd {
+  margin: 0.2em 0 0;
+  font-weight: 700;
+}
+
+#title-best {
+  font-family: var(--font-display);
+  font-weight: 400;
+  color: var(--kid);
+}
+
+.stat {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.6em;
+  color: var(--kid);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-big {
+  font-size: 3.2em;
+  line-height: 1;
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.85em;
+  color: var(--ink-dim);
+  line-height: 1.5;
+}
+
+/* ───────── 設定 ───────── */
+fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  min-width: 0;
+}
+
+legend {
+  padding: 0 0 0.5em;
+  font-size: 0.78em;
+  letter-spacing: 0.12em;
+  color: var(--ink-dim);
+}
+
+#mode-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45em;
+}
+
+.mode-option {
+  position: relative;
+  display: block;
+  cursor: pointer;
+}
+
+.mode-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mode-card {
+  display: grid;
+  grid-template-columns: 2em 1fr;
+  gap: 0.1em 0.6em;
+  align-items: center;
+  padding: 0.6em 0.75em;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(244, 240, 255, 0.04);
+}
+
+.mode-num {
+  grid-row: span 2;
+  font-family: var(--font-display);
+  font-size: 1.1em;
+  color: var(--ink-dim);
+  text-align: center;
+}
+
+.mode-name {
+  font-weight: 700;
+}
+
+.mode-name em {
+  margin-left: 0.4em;
+  font-style: normal;
+  font-size: 0.72em;
+  padding: 0.1em 0.5em;
+  border-radius: 999px;
+  background: var(--spike);
+  color: #2a0a10;
+  vertical-align: 0.15em;
+}
+
+.mode-desc {
+  font-size: 0.8em;
+  color: var(--ink-dim);
+  line-height: 1.4;
+}
+
+.mode-option input:checked + .mode-card {
+  border-color: var(--kid);
+  background: rgba(255, 181, 71, 0.12);
+}
+
+.mode-option input:checked + .mode-card .mode-num {
+  color: var(--kid);
+}
+
+.gyro-options[disabled] {
+  opacity: 0.45;
+}
+
+.switch-row,
+.range-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1em;
+  padding: 0.6em 0;
+  border-top: 1px solid var(--line);
+}
+
+.switch-row span,
+.range-row span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2em;
+  min-width: 0;
+}
+
+.switch-row small,
+.range-row small {
+  color: var(--ink-dim);
+  font-size: 0.8em;
+  line-height: 1.4;
+}
+
+input[type="checkbox"][role="switch"] {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  width: 3em;
+  height: 1.7em;
+  border-radius: 999px;
+  background: var(--line);
+  position: relative;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+input[type="checkbox"][role="switch"]::after {
+  content: "";
+  position: absolute;
+  top: 0.2em;
+  left: 0.2em;
+  width: 1.3em;
+  height: 1.3em;
+  border-radius: 50%;
+  background: var(--ink);
+  transition: transform 0.15s;
+}
+
+input[type="checkbox"][role="switch"]:checked {
+  background: var(--glow);
+}
+
+input[type="checkbox"][role="switch"]:checked::after {
+  transform: translateX(1.3em);
+}
+
+input[type="range"] {
+  flex: 0 1 8em;
+  min-width: 0;
+  accent-color: var(--kid);
+}
+
+/* ───────── 音效與錄音 ───────── */
+.mic-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1em;
+  padding: 0.6em 0;
+  border-top: 1px solid var(--line);
+}
+
+.mic-row span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2em;
+  min-width: 0;
+}
+
+.mic-row small {
+  color: var(--ink-dim);
+  font-size: 0.8em;
+  line-height: 1.4;
+}
+
+#mic-status[data-state="on"] {
+  color: var(--glow);
+}
+
+#mic-status[data-state="denied"],
+#mic-status[data-state="unavailable"] {
+  color: var(--spike);
+}
+
+h3 {
+  margin: 0;
+  font-size: 0.95em;
+}
+
+.slot-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4em;
+  margin-top: 0.4em;
+}
+
+.slot {
+  display: grid;
+  grid-template-columns: 1.6em 1fr auto auto auto;
+  align-items: center;
+  gap: 0.4em;
+  padding: 0.3em 0.5em;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(244, 240, 255, 0.04);
+}
+
+.slot-name {
+  font-family: var(--font-display);
+  color: var(--ink-dim);
+  text-align: center;
+}
+
+.slot-state {
+  font-size: 0.8em;
+  color: var(--ink-dim);
+}
+
+.slot-state[data-filled="true"] {
+  color: var(--glow);
+}
+
+.slot-btn {
+  width: 2.6em;
+  height: 2.6em;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(244, 240, 255, 0.08);
+  font-size: 1em;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.slot-btn:disabled,
+.slot-btn[aria-disabled="true"] {
+  opacity: 0.35;
+}
+
+.slot-btn:focus-visible {
+  outline: 2px solid var(--glow);
+  outline-offset: 2px;
+}
+
+.slot.is-recording {
+  border-color: var(--spike);
+  background: rgba(255, 93, 108, 0.14);
+}
+
+.slot.is-recording .slot-state {
+  color: var(--spike);
+}
+
+/* ───────── 死前 10 秒重播 ───────── */
+.replay {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6em;
+  padding: 0.9em;
+  border-radius: 12px;
+  border: 1px solid var(--spike);
+  background: rgba(255, 93, 108, 0.08);
+}
+
+.seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4em;
+}
+
+.seg-btn {
+  flex: 1 1 auto;
+  min-height: 2.6em;
+  padding: 0.4em 0.6em;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(244, 240, 255, 0.05);
+  color: var(--ink);
+  font: 700 0.85em/1.2 var(--font-body);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.seg-btn[aria-pressed="true"] {
+  border-color: var(--kid);
+  background: rgba(255, 181, 71, 0.18);
+  color: var(--kid);
+}
+
+.seg-btn:disabled {
+  opacity: 0.35;
+}
+
+.replay-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5em;
+}
+
+.replay .btn:disabled {
+  opacity: 0.45;
+}
+
+/* ───────── 排行榜 ───────── */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.text-input {
+  width: 100%;
+  min-height: 3em;
+  padding: 0.5em 0.8em;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(244, 240, 255, 0.08);
+  color: var(--ink);
+  font: 700 1em/1.2 var(--font-body);
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.text-input::placeholder {
+  color: var(--ink-dim);
+  font-weight: 400;
+}
+
+.submit {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6em;
+  padding: 0.9em;
+  border-radius: 12px;
+  border: 1px solid var(--kid-dark);
+  background: rgba(255, 181, 71, 0.08);
+}
+
+.submit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+}
+
+.submit .btn:disabled {
+  opacity: 0.5;
+}
+
+.rank-result {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4em;
+  padding: 0.8em;
+  border-radius: 10px;
+  background: rgba(109, 255, 158, 0.12);
+  border: 1px solid var(--glow);
+}
+
+.rank-line {
+  margin: 0;
+  font-size: 1.25em;
+  font-weight: 900;
+  line-height: 1.35;
+  color: var(--glow);
+}
+
+.rank-line b {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 1.5em;
+  color: var(--kid);
+}
+
+.panel-board {
+  width: min(100%, 26em);
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4em;
+}
+
+.tab {
+  min-height: 2.8em;
+  padding: 0.3em 0.4em;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(244, 240, 255, 0.05);
+  color: var(--ink-dim);
+  font: 700 0.82em/1.25 var(--font-body);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.tab[aria-selected="true"] {
+  border-color: var(--kid);
+  background: rgba(255, 181, 71, 0.18);
+  color: var(--kid);
+}
+
+.tab:focus-visible {
+  outline: 2px solid var(--glow);
+  outline-offset: 2px;
+}
+
+.board-status {
+  padding: 1.2em 0;
+  text-align: center;
+  color: var(--ink-dim);
+  line-height: 1.6;
+}
+
+.board-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.board-row {
+  display: grid;
+  grid-template-columns: 2.4em 1fr auto 3.4em;
+  align-items: center;
+  gap: 0.5em;
+  padding: 0.45em 0.5em;
+  border-radius: 8px;
+  background: rgba(244, 240, 255, 0.04);
+  font-size: 0.9em;
+}
+
+.board-row.is-me {
+  background: rgba(109, 255, 158, 0.16);
+  outline: 1px solid var(--glow);
+}
+
+.board-rank {
+  font-family: var(--font-display);
+  text-align: center;
+  color: var(--ink-dim);
+}
+
+.board-row:nth-child(1) .board-rank { color: #ffd34d; }
+.board-row:nth-child(2) .board-rank { color: #d6dbe8; }
+.board-row:nth-child(3) .board-rank { color: #e39a62; }
+
+.board-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.board-score {
+  font-family: var(--font-display);
+  color: var(--kid);
+  font-variant-numeric: tabular-nums;
+}
+
+.gyro-badge {
+  display: inline-block;
+  padding: 0 0.35em;
+  border-radius: 999px;
+  background: rgba(109, 255, 158, 0.2);
+  border: 1px solid var(--glow);
+  font-size: 0.85em;
+  line-height: 1.4;
+}
+
+.mode-option input:disabled + .mode-card {
+  opacity: 0.45;
+}
+
+.board-date {
+  font-size: 0.8em;
+  color: var(--ink-dim);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo span,
+  #toast {
+    animation: none;
+  }
+}
+
+/* 自訂語音包：最高紀錄 B30 以前鎖住 */
+.voice-lock {
+  color: var(--accent, #ffd166);
+  font-weight: 700;
+}
+.custom-sfx.is-locked .slot-group {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+</style>
+<div id="app">
+  <div id="stage">
+    <canvas id="game" aria-label="遊戲畫面"></canvas>
+
+    <div id="hud-buttons" hidden>
+      <button id="btn-calibrate" class="hud-btn" type="button" aria-label="以目前角度重新校正平衡點" hidden>🎯</button>
+      <button id="btn-pause" class="hud-btn" type="button" aria-label="暫停">
+        <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="3" y="2" width="3.5" height="12" rx="1" fill="currentColor"/><rect x="9.5" y="2" width="3.5" height="12" rx="1" fill="currentColor"/></svg>
+      </button>
+    </div>
+
+    <div id="toast" role="status" aria-live="polite" hidden></div>
+
+    <section id="screen-title" class="screen screen-title">
+      <div class="panel">
+        <p class="eyebrow">PHASE 1 · B1F ↓</p>
+        <h1 class="logo" aria-label="小朋友下樓梯"><span aria-hidden="true" style="--i:0">小</span><span aria-hidden="true" style="--i:1">朋</span><span aria-hidden="true" style="--i:2">友</span><span aria-hidden="true" style="--i:3">下</span><span aria-hidden="true" style="--i:4">樓</span><span aria-hidden="true" style="--i:5">梯</span></h1>
+        <p class="rules">踩到刺針扣 1 HP，別撞到天花板，也別掉進深淵。連續踩穩 15 階回 0.5 HP。</p>
+        <div class="actions">
+          <button id="btn-start" class="btn btn-primary" type="button">開始遊戲</button>
+          <button id="btn-open-leaderboard" class="btn" type="button">🏆 排行榜</button>
+          <button id="btn-open-settings" class="btn" type="button">設定</button>
+        </div>
+        <dl class="meta">
+          <div><dt>操控</dt><dd id="title-mode">左右點擊</dd></div>
+          <div><dt>最佳紀錄</dt><dd id="title-best">B0F</dd></div>
+        </dl>
+      </div>
+    </section>
+
+    <section id="screen-settings" class="screen" hidden>
+      <div class="panel">
+        <button id="btn-x-settings" class="panel-close" type="button" aria-label="關閉設定">✕</button>
+        <h2>設定</h2>
+        <fieldset class="modes">
+          <legend>遊戲模式（平台速度）</legend>
+          <div id="gamemode-list"></div>
+          <p id="gamemode-note" class="hint"></p>
+        </fieldset>
+        <fieldset class="modes">
+          <legend>操控方式（任何遊戲模式都能用）</legend>
+          <div id="mode-list"></div>
+        </fieldset>
+        <fieldset id="gyro-options" class="gyro-options">
+          <legend>陀螺儀</legend>
+          <label class="switch-row" for="opt-autocal">
+            <span>
+              <strong>開局自動校正</strong>
+              <small>倒數到 0 的瞬間，把當下的手機角度設為平衡點</small>
+            </span>
+            <input id="opt-autocal" type="checkbox" role="switch" checked>
+          </label>
+          <label class="range-row" for="opt-tilt">
+            <span><strong>靈敏度</strong><small>傾斜 <output id="opt-tilt-out">22</output>° 達到全速</small></span>
+            <input id="opt-tilt" type="range" min="10" max="40" step="1" value="22">
+          </label>
+          <p id="gyro-status" class="hint"></p>
+        </fieldset>
+        <fieldset id="audio-options" class="audio-options">
+          <legend>音效與錄音</legend>
+          <label class="switch-row" for="opt-sfx">
+            <span>
+              <strong>遊戲音效</strong>
+              <small>踩平台、扣血、倒數的聲音</small>
+            </span>
+            <input id="opt-sfx" type="checkbox" role="switch" checked>
+          </label>
+          <div class="mic-row">
+            <span>
+              <strong>麥克風</strong>
+              <small id="mic-status" data-state="off">未啟用</small>
+            </span>
+            <button id="btn-mic" class="btn btn-small" type="button">啟用</button>
+          </div>
+          <label class="switch-row" for="opt-replay">
+            <span>
+              <strong>死前 10 秒重播</strong>
+              <small>僅保留死前10秒於本機，不會上傳</small>
+            </span>
+            <input id="opt-replay" type="checkbox" role="switch">
+          </label>
+        </fieldset>
+        <fieldset class="custom-sfx">
+          <legend>自訂語音包（按住 ⏺️ 錄音，最長 1.5 秒）</legend>
+          <p id="voice-lock" class="hint voice-lock" hidden></p>
+          <p class="hint">每個情境有 3 個槽位，有錄音的槽位會隨機挑一個播放；全空就用預設音效。錄音存在這台裝置的 localStorage，不會上傳。踩踏與彈簧跳躍的音效會隨層數變高亢（每 30 層 ×1.05）。</p>
+          <div class="slot-group">
+            <h3>踩到安全平台</h3>
+            <div id="slots-safe"></div>
+          </div>
+          <div class="slot-group">
+            <h3>踩到尖刺扣血</h3>
+            <div id="slots-hurt"></div>
+          </div>
+        </fieldset>
+        <div class="actions">
+          <button id="btn-close-settings" class="btn btn-primary" type="button">完成</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-pause" class="screen" hidden>
+      <div class="panel">
+        <button id="btn-x-pause" class="panel-close" type="button" aria-label="關閉並繼續遊戲">✕</button>
+        <h2>暫停</h2>
+        <p class="stat" id="pause-floor">B0F</p>
+        <div class="actions">
+          <button id="btn-resume" class="btn btn-primary" type="button">繼續</button>
+          <button id="btn-recalibrate" class="btn" type="button" hidden>🎯 重置平衡點</button>
+          <button id="btn-pause-settings" class="btn" type="button">設定</button>
+          <button id="btn-restart" class="btn" type="button">重新開始</button>
+          <button id="btn-pause-menu" class="btn btn-ghost" type="button">回主選單</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-over" class="screen" hidden>
+      <div class="panel">
+        <p class="eyebrow">GAME OVER</p>
+        <p class="stat stat-big" id="over-floor">B0F</p>
+        <p class="hint" id="over-best">最佳紀錄 B0F</p>
+        <section id="submit" class="submit" hidden>
+          <h3>🏆 上傳成績</h3>
+          <p id="submit-track" class="hint"></p>
+          <div id="submit-form" class="submit-form">
+            <label class="visually-hidden" for="nickname">暱稱</label>
+            <input id="nickname" class="text-input" type="text" maxlength="12" autocomplete="nickname" autocapitalize="off" spellcheck="false" placeholder="你的暱稱（最多 12 字）">
+            <button id="btn-submit-score" class="btn btn-primary" type="button">上傳成績</button>
+          </div>
+          <p id="submit-status" class="hint" role="status"></p>
+          <div id="rank-result" class="rank-result" role="status" hidden>
+            <p id="rank-line" class="rank-line"></p>
+            <p id="rank-sub" class="hint"></p>
+            <button id="btn-rank-board" class="btn btn-small" type="button">🏆 看排行榜</button>
+          </div>
+        </section>
+        <section id="replay" class="replay" hidden>
+          <h3>☠️ 死前 10 秒精彩重播</h3>
+          <p id="replay-note" class="hint"></p>
+          <div class="seg" role="group" aria-label="重播聲軌">
+            <button type="button" class="seg-btn" data-replay-mode="A" aria-pressed="false">玩家慘叫 (A)</button>
+            <button type="button" class="seg-btn" data-replay-mode="B" aria-pressed="false">遊戲音效 (B)</button>
+            <button type="button" class="seg-btn" data-replay-mode="AB" aria-pressed="true">雙軌混音 (A+B)</button>
+          </div>
+          <div class="seg" role="group" aria-label="播放速度">
+            <button type="button" class="seg-btn" data-replay-speed="1" aria-pressed="true">⚡ 1.0x 原速</button>
+            <button type="button" class="seg-btn" data-replay-speed="2" aria-pressed="false">⚡ 2.0x 鬼畜雙倍速</button>
+          </div>
+          <p id="replay-busy" class="hint" role="status"></p>
+          <div class="replay-actions">
+            <button id="btn-replay-play" class="btn" type="button">▶ 播放</button>
+            <button id="btn-replay-download" class="btn" type="button">⬇️ 下載重播</button>
+          </div>
+        </section>
+        <div class="actions">
+          <button id="btn-retry" class="btn btn-primary" type="button">再玩一次</button>
+          <button id="btn-over-menu" class="btn" type="button">回主選單</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-leaderboard" class="screen" hidden>
+      <div class="panel panel-board">
+        <button id="btn-x-leaderboard" class="panel-close" type="button" aria-label="關閉排行榜">✕</button>
+        <h2>🏆 排行榜</h2>
+        <div class="tabs" role="tablist" aria-label="賽道">
+          <button type="button" class="tab" role="tab" id="tab-standard" data-track="standard" aria-selected="true">標準賽道 Top 100</button>
+          <button type="button" class="tab" role="tab" id="tab-nightmare" data-track="nightmare" aria-selected="false">地獄賽道 Top 100</button>
+        </div>
+        <p id="board-note" class="hint"></p>
+        <div id="board-status" class="board-status" role="status" hidden></div>
+        <ol id="board-list" class="board-list" aria-live="polite"></ol>
+        <button id="btn-board-retry" class="btn btn-small" type="button" hidden>重新載入</button>
+      </div>
+    </section>
+
+    <section id="screen-confirm" class="screen screen-modal" role="alertdialog" aria-modal="true" aria-labelledby="confirm-message" hidden>
+      <div class="panel panel-confirm">
+        <p id="confirm-message" class="confirm-message"></p>
+        <div class="confirm-actions">
+          <button id="confirm-cancel" class="btn" type="button">取消</button>
+          <button id="confirm-ok" class="btn btn-primary" type="button">確定</button>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+<script>
+(() => {
+'use strict';
+// ── config.js ──
+// 遊戲全域參數。所有座標都是「邏輯座標」：寬固定 360，高依螢幕比例在 MIN_H~MAX_H 之間。
+const CONFIG = Object.freeze({
+  WORLD_W: 360,
+  MIN_H: 540,
+  MAX_H: 780,
+
+  HUD_H: 40,          // 頂部 HUD 區
+  CEILING_Y: 62,      // 刺針天花板的下緣
+
+  // 物理（單位：邏輯 px / 秒）
+  GRAVITY: 1900,
+  MAX_FALL: 640,
+  MOVE_SPEED: 190,
+  MOVE_ACCEL: 2600,   // 左右加速度，讓手感不會太滑也不會太硬
+  MAX_STEP: 1 / 120,  // 物理子步長上限（任何刷新率都切成 <= 1/120 秒）
+  MAX_FRAME_DT: 0.1,  // 分頁切回來時避免一次跳太大
+
+  PLAYER_W: 22,
+  PLAYER_H: 30,
+
+  PLATFORM_W: 84,
+  PLATFORM_H: 12,
+  PLATFORM_GAP: 76,   // 平台垂直間距
+  PLATFORM_JITTER: 10,
+  WALL_MARGIN: 6,
+
+  // 平台上升速度：隨樓層微幅加速
+  RISE_BASE: 72,
+  RISE_PER_FLOOR: 0.45,
+  RISE_MAX: 150,
+  RISE_BONUS_FLOOR: 200,      // 超過這一層後，上升速度額外乘上 RISE_BONUS（第四階段機制，所有模式適用）
+  RISE_BONUS: 1.2,
+  NIGHTMARE_UNLOCK_FLOOR: 150, // 標準或極速模式打到這一層，才開放地獄模式
+
+  // 血量：6 格 = 3 HP，1 格 = 0.5 HP
+  MAX_HP_UNITS: 6,
+  SPIKE_DAMAGE: 2,
+  CEILING_DAMAGE: 2,
+  INVINCIBLE_TIME: 1.5,
+  HEAL_STREAK: 15,
+
+  // 平台生成
+  SAFE_START: 3,              // 前幾階一定是一般平台
+  SPIKE_CHANCE_BASE: 0.14,
+  SPIKE_CHANCE_PER_FLOOR: 0.004,
+  SPIKE_CHANCE_MAX: 0.42,
+  MAX_SPIKE_STREAK: 2,        // 連續 2 個刺針後強制一般平台
+  REACH_SAFETY: 0.8,          // 規劃路徑時，只信任角色 80% 的移動速度（安全容錯）
+  RISE_TOLERANCE: 0.05,       // 路徑要在上升速度 ±5% 內都成立
+  MIN_OFFSET_RATIO: 0.6,      // 相鄰兩階中心點最小距離（平台寬度的倍數），避免視覺上疊在一起
+  SPIKE_AFTER_NORMAL_RATIO: 1.2, // 一般平台之後的刺針平台，中心點要拉開的距離（平台寬度的倍數）
+  SHADOW_MARGIN: 10,          // 新的一般平台正上方通道，左右各加寬多少，不能碰到危險投影區
+  SPIKE_CHANNEL: 1.5,         // 連續刺針之間要留的空隙通道，單位為角色寬度的倍數
+  WARN_FLOOR: 50,             // 50 層後顯示安全預警光暈
+
+  COUNTDOWN: 3,
+
+  // 陀螺儀
+  GYRO_DEADZONE: 2.5,         // 度
+  GYRO_DEFAULT_TILT: 22,      // 傾斜多少度達到全速
+});
+
+// 特殊平台的效果參數（第四階段平台系統）
+const SPRING_BASE_HEIGHT = 150; // 彈簧原本的彈跳高度（px）
+const SPRING_POWER = 1.25;      // 彈跳衝力（初速）倍率；高度跟初速的平方成正比
+
+const FX = Object.freeze({
+  CONVEYOR_PUSH: 72,       // 滾輪：站在上面每秒被推多少 px（原本 60 的 1.2 倍）
+  SPRING_POWER,
+  SPRING_HEIGHT: SPRING_BASE_HEIGHT * SPRING_POWER * SPRING_POWER, // 彈簧：理想彈跳高度（px），約 234
+  SPRING_MIN_HEIGHT: 24,   // 離天花板太近、彈不到這個高度就不彈（當一般平台）
+  SPRING_GUARD_RATIO: 1.8, // 彈簧正上方這個倍數 × 彈跳高度之內，不能有尖刺 / 雷射平台
+  FLIP_DELAY: 0.6,         // 碎石：踩上後震動幾秒就碎裂
+  FLIP_FADE: 0.45,         // 碎石：碎片掉落動畫的時間
+  FLIP_ICE_GAP: 2,         // 碎石 / 幻影之後幾層之內不放滑冰、泥沼
+  FLIP_FLIP_GAP: 2,        // 碎石 / 幻影之後幾層之內不放另一個碎石 / 幻影
+  FLIP_SPIKE_GAP: 1,       // 碎石 / 幻影之後幾層之內不放尖刺
+  ICE_ACCEL_SCALE: 0.264,  // 滑冰：左右加速度（含反向煞車）；原本 0.22 的 1.2 倍
+  ICE_SLIDE_SPEED: 213,    // 滑冰：按一下（不管按多大力）就以這個固定速度滑出去（142 的 1.5 倍），之後放開也不會停，直到踩上非冰面或撞牆
+  SLIME_LATE_FLOOR: 300,         // 泥沼：這一層以上，減速效果減少 25%
+  SLIME_LATE_SCALE: 1 - (1 - 0.5 / 1.3) * 0.75, // 泥沼 >= 300F：速度倍率 0.5385（減速 61.54% → 46.155%，減少 25%），190 → 約 102.3 px/s
+  SLIME_SPEED_SCALE: 0.5 / 1.3, // 泥沼：站在上面時水平速度剩這個比例（約 38%，原本 50% 再加強 1.3 倍）
+  MOVING_AMP: 28,          // 橫移：左右巡邏半徑（px）
+  MOVING_OMEGA: 1.25,      // 橫移：角速度（rad/s），最高水平速度 = AMP × OMEGA
+  PORTAL_FLASH: 0.35,      // 傳送門：傳送特效時間
+  PORTAL_DELAY: 0.3,       // 傳送門：踩上後傳送門立刻消失，目的地馬上出現 0.3 秒的傳送動畫，結束才真的傳過去
+  PORTAL_UP_CHANCE: 0.7,   // 傳送門：往上傳的機率（其餘往下；找不到合法目標就換另一個方向）
+  PORTAL_UP_RANGE: 6,      // 傳送門：往上時，只找上方這麼多層之內的安全平台
+  PORTAL_DROP_HEIGHT: 200, // 傳送門：角色出現在目標平台表面上方這麼高（px），再自由落下
+  PORTAL_CEILING_SAFE: 250, // 傳送門：目標平台離頂端天花板尖刺至少這麼遠（px），預留落下空間
+  PORTAL_NEAR_CEILING: 100, // 傳送門：落點離天花板尖刺小於這麼多（px），而且下方安全平台也太近時，落點往下移
+  PORTAL_NEAR_FLOOR: 150,   // 傳送門：落點正下方最近的安全平台小於這麼多（px）算太近；同時是往下移的距離
+  PORTAL_UP_HEADROOM: 1.5, // 傳送門：往上傳的落點，離天花板至少要有這麼多秒的上升空間，否則一落地就被刺到
+  PORTAL_BOTTOM_MARGIN: 110, // 傳送門：落點離畫面下緣至少這麼遠（約 1.5 層），免得傳過去下面已經沒有平台可踩
+  ENDGAME_FLOOR: 500,      // 這一層以上，第五階段多出雷射與幻影平台
+  LASER_ON: 1,             // 雷射：開啟幾秒
+  LASER_OFF: 2,            // 雷射：關閉幾秒
+  LASER_WARN: 0.5,         // 雷射：開啟前幾秒開始閃爍預警
+  LASER_WIDTH: 14,         // 雷射：光束寬度（px），在平台正中央
+  LASER_LENGTH: 190 * 1.3, // 雷射：光束往下延伸多長（px），原本 190 的 1.3 倍
+  LASER_MAX: 2,            // 雷射：同時存在的雷射平台上限（畫面與預先生成的平台合計）
+  PHANTOM_PERIOD: 1,       // 幻影：每隔幾秒在實體與虛無之間切換一次
+  PHANTOM_BLINK: 0.3,      // 幻影：切換前幾秒開始閃爍預警
+});
+
+const AUDIO = Object.freeze({
+  VOICE_UNLOCK_FLOOR: 30, // 最高紀錄達到這一層，才開放自訂語音包
+  VOICE_RATE_MAX: 1.8,    // 自訂語音：播放速率（音高）上限，隨層數線性提高
+  VOICE_RATE_FLOORS: 400, // 自訂語音：從 1.0 倍線性提高，到這一層達到上限
+  VOICE_FADE: 0.03,       // 自訂語音：同時超過上限時，最早的那個淡出切斷的秒數
+  VOICE_MAX: 3,           // 自訂語音：全域最多同時播放幾個
+  REVERSE_FLOOR: 300,     // 倒放語音：踩到傳送門且層數 >= 這個值，100% 觸發
+  CRUSH_BUFF_SECONDS: 5,  // 電音破音：踩到 / 被雷射打到之後持續幾秒
+  CRUSH_MAX_LEVEL: 4,     // 電音破音強度上限（level = min(層數 / 100, 4)）
+  STUTTER_CHANCE: 0.4,    // 碎石平台：踩到時 40% 機率口吃（其他平台不會）
+  STUTTER_SECONDS: 0.5,   // 口吃：重複的開頭片段長度（前 0.5 秒），重複 2~3 次後再播完整語音
+  SPRING_SLOW: 0.5,       // 彈簧：前段放慢成這個速度（蓄力壓下），後段恢復
+  SPRING_HEAD_MAX: 0.8,   // 彈簧：前段長度上限（秒）；也不超過語音總長的 SPRING_HEAD_RATIO
+  SPRING_HEAD_RATIO: 0.6,
+  ICE_BEND_UP: 1.5,       // 冰面：播放速率拉高到這個倍數
+  ICE_BEND_DOWN: 0.6,     // 冰面：再陡降到這個倍數（滑倒失控的尾音）
+  ICE_BEND_UP_SECONDS: 0.3,
+  ICE_BEND_DOWN_SECONDS: 0.15,
+  SLIME_VOICE_CUTOFF: 1000, // 泥沼：低通濾波截止頻率（Hz）
+  SLIME_VOICE_RATE: 0.7,    // 泥沼：語音播放速率（放慢 30%）
+  SLIME_TREMOLO_HZ: 10,     // 泥沼：音量抖動頻率（8~12Hz）
+  SLIME_TREMOLO_DEPTH: 0.2, // 泥沼：音量抖動幅度（±20%）
+  SLIME_LOOP_INTERVAL: 0.15, // 泥沼：每隔這麼久疊上一小段重複的語音片段（秒）
+  SLIME_LOOP_LENGTH: 0.1,    // 泥沼：重複片段長度（秒）
+  SLIME_LOOP_BACK: 0.06,     // 泥沼：重複片段從目前位置往前多少秒開始（像被黏住的回彈）
+  STRETCH_FRAME: 0.025,      // 保持音高的變速：處理視窗長度（秒）
+  LOW_HP: 2,              // 低血量（<= 2/6）：語音強制慢速低沉
+  LOW_RATE: 0.7,          // 低血量：播放速率（0.5 太低、聽不清人聲）
+  LOW_MAX_SECONDS: 2.5,   // 低血量：單次語音最長只播這麼久
+  LOW_CUTOFF: 800,        // 低血量：低通濾波截止頻率（Hz），濾掉刺耳高頻、保留中頻人聲
+  REPLAY_SECONDS: 10,     // 死前重播只保留最後幾秒
+  CLIP_MAX_SECONDS: 1.5,  // 自訂音效最長錄音秒數
+  CLIP_MIN_SECONDS: 0.15, // 太短的錄音視為誤觸，直接丟掉
+  TAP_SIZE: 2048,         // 擷取麥克風的緩衝大小（取樣數）
+  SLOTS: ['A', 'B', 'C'],
+});
+
+const CLIP_KINDS = Object.freeze([
+  { id: 'safe', title: '踩到安全平台' },
+  { id: 'hurt', title: '踩到尖刺扣血' },
+]);
+
+const CONTROL_MODES = Object.freeze([
+  { id: 'tap', name: '左右點擊', desc: '按住螢幕左半邊往左，右半邊往右' },
+  { id: 'buttons', name: '虛擬按鍵', desc: '下方左右方向鈕，判定範圍比按鈕本身大' },
+  { id: 'joystick', name: '虛擬搖桿', desc: '下半部按住，搖桿出現在手指位置，左右拖曳，拉越遠走越快' },
+  { id: 'gyro', name: '陀螺儀體感', desc: '左右傾斜手機移動（困難模式）', hard: true },
+]);
+
+const COLORS = Object.freeze({
+  shaft: '#17142e',
+  shaftDeep: '#0e0c1f',
+  brick: '#221e44',
+  brickLine: '#2c2756',
+  hud: '#0e0c1f',
+  ink: '#f4f0ff',
+  inkDim: '#a49ccf',
+  stone: '#7fd6c8',
+  stoneTop: '#c5f3ea',
+  stoneShade: '#3f8f86',
+  spike: '#ff5d6c',
+  spikeDark: '#b3263a',
+  ceiling: '#d9d3f5',
+  kid: '#ffb547',
+  kidDark: '#d9821c',
+  skin: '#ffd9b8',
+  hair: '#3a2416',
+  heart: '#ff5d6c',
+  heartEmpty: '#3a3466',
+  glow: '#6dff9e',
+  control: 'rgba(244, 240, 255, 0.16)',
+  controlActive: 'rgba(255, 181, 71, 0.55)',
+});
+
+// ── utils.js ──
+const clamp = (v, min, max) => (v < min ? min : v > max ? max : v);
+const lerp = (a, b, t) => a + (b - a) * t;
+const randRange = (min, max) => min + Math.random() * (max - min);
+
+// 朝目標值以固定速率逼近
+const approach = (value, target, delta) =>
+  value < target ? Math.min(value + delta, target) : Math.max(value - delta, target);
+
+// 死區處理後重新映射到 [-1, 1]
+const applyDeadzone = (v, dz) => {
+  const a = Math.abs(v);
+  if (a <= dz) return 0;
+  return Math.sign(v) * Math.min(1, (a - dz) / (1 - dz));
+};
+
+// localStorage 在私密視窗或內嵌預覽可能丟例外，一律包起來
+const storage = {
+  get(key, fallback) {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw == null ? fallback : JSON.parse(raw);
+    } catch {
+      return fallback;
+    }
+  },
+  set(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      /* 無法儲存時直接略過 */
+    }
+  },
+};
+
+// 可重現的亂數（mulberry32）。傳送門的落點用它，才不會干擾關卡生成用的亂數序列
+function seededRandom(seed) {
+  let a = seed | 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// ── modes.js ──
+/**
+ * 遊戲模式：只改「上升速度」，操控方式（點擊 / 按鍵 / 搖桿 / 陀螺儀）可以自由搭配。
+ * trackId 決定成績進哪個排行榜：標準與極速共用 standard，地獄獨佔 nightmare。
+ */
+const GAME_MODES = Object.freeze([
+  { id: 'standard', name: '標準模式', badge: '1.0x', mult: 1, trackId: 'standard', desc: '以基礎速度開始，隨層數慢慢加快' },
+  { id: 'turbo', name: '極速模式', badge: '1.5x', mult: 1.5, trackId: 'standard', desc: '開局就是 1.5 倍速，追上標準速度後再照原公式加速' },
+  { id: 'nightmare', name: '地獄模式', badge: '2.0x', mult: 2, trackId: 'nightmare', desc: '開局 2 倍速。標準或極速打到 B150F 解鎖', locked: true },
+]);
+
+const gameModeById = (id) => GAME_MODES.find((m) => m.id === id) || GAME_MODES[0];
+
+/** V_base：標準模式 B0F 的上升速度 */
+const V_BASE = CONFIG.RISE_BASE;
+
+/** 標準模式的上升速度（原本的遞增公式）。沒有第四階段加成，用來當作其他模式的對照基準 */
+function getSpeedByFloor(floor) {
+  return Math.min(CONFIG.RISE_MAX, CONFIG.RISE_BASE + floor * CONFIG.RISE_PER_FLOOR);
+}
+
+/** 標準速度第一次 >= mult × V_base 的樓層；永遠追不上（超過速度上限）時回傳 Infinity */
+function releaseFloor(mult) {
+  const target = mult * V_BASE;
+  if (target <= V_BASE) return 0;
+  if (target > CONFIG.RISE_MAX) return Infinity;
+  return Math.ceil((target - CONFIG.RISE_BASE) / CONFIG.RISE_PER_FLOOR);
+}
+
+/**
+ * 各模式的實際上升速度：
+ *   開局鎖在 mult × V_base，直到標準速度追上那個值（releaseFloor），之後完全跟著標準公式走。
+ *   超過 B200F，所有模式再加 20%。
+ */
+function riseSpeedFor(modeId, floor) {
+  const { mult } = gameModeById(modeId);
+  const held = floor < releaseFloor(mult) ? mult * V_BASE : 0;
+  const speed = Math.max(held, getSpeedByFloor(floor));
+  return floor > CONFIG.RISE_BONUS_FLOOR ? speed * CONFIG.RISE_BONUS : speed;
+}
+
+/** bests: { standard, turbo, nightmare }，單位都是樓層 */
+function isNightmareUnlocked(bests) {
+  return Math.max(bests.standard || 0, bests.turbo || 0) >= CONFIG.NIGHTMARE_UNLOCK_FLOOR;
+}
+
+function isModeUnlocked(modeId, bests) {
+  return modeId !== 'nightmare' || isNightmareUnlocked(bests);
+}
+
+/** 三種模式的歷史最高樓層取最大值 */
+function bestOverall(bests) {
+  return Math.max(bests.standard || 0, bests.turbo || 0, bests.nightmare || 0);
+}
+
+/** 最高紀錄達到 AUDIO.VOICE_UNLOCK_FLOOR（B30）就開放自訂語音包 */
+function isVoicePackUnlocked(bests) {
+  return bestOverall(bests) >= AUDIO.VOICE_UNLOCK_FLOOR;
+}
+
+// ── kinds.js ──
+/** 平台種類。獨立成一個檔案，避免 stages.js 與 platforms.js 互相引用 */
+const Kind = Object.freeze({
+  NORMAL: 'NORMAL',
+  SPIKES: 'SPIKES',
+  CONVEYOR: 'CONVEYOR',
+  SPRING: 'SPRING',
+  FLIP: 'FLIP',
+  ICE: 'ICE',
+  SLIME: 'SLIME',
+  MOVING: 'MOVING',
+  PORTAL: 'PORTAL',
+  SPIKE_MOVING: 'SPIKE_MOVING',
+  LASER: 'LASER',
+  PHANTOM: 'PHANTOM',
+});
+
+const KIND_LABEL = Object.freeze({
+  NORMAL: '一般', SPIKES: '尖刺', CONVEYOR: '滾輪', SPRING: '彈簧', FLIP: '碎石',
+  ICE: '滑冰', SLIME: '泥沼', MOVING: '橫移', PORTAL: '傳送門', SPIKE_MOVING: '動態尖刺',
+  LASER: '雷射', PHANTOM: '幻影',
+});
+
+/** 踩上去之後會把人「丟」下去的平台：碎石、幻影。生成器的防死局規則要一起看 */
+const isDropper = (kind) => kind === Kind.FLIP || kind === Kind.PHANTOM;
+
+// ── settings.js ──
+const SETTINGS_KEY = 'kids-downstairs.settings.v1';
+const BEST_KEY = 'kids-downstairs.best.v1';        // 舊版：單一最佳紀錄
+const BESTS_KEY = 'kids-downstairs.bests.v2';       // 新版：每個遊戲模式各一筆
+
+const DEFAULT_SETTINGS = Object.freeze({
+  mode: 'tap',          // 操控方式
+  gameMode: 'standard', // 遊戲模式：standard | turbo | nightmare
+  autoCalibrate: true,
+  gyroTilt: CONFIG.GYRO_DEFAULT_TILT,
+  sfx: true,
+  nickname: '', // 上次上傳排行榜用的暱稱
+  deathReplay: false, // 預設關閉：要先看過說明並允許麥克風才會錄
+});
+
+function loadSettings() {
+  const saved = storage.get(SETTINGS_KEY, {});
+  const merged = { ...DEFAULT_SETTINGS, ...saved };
+  if (!CONTROL_MODES.some((m) => m.id === merged.mode)) merged.mode = DEFAULT_SETTINGS.mode;
+  if (!GAME_MODES.some((m) => m.id === merged.gameMode)) merged.gameMode = DEFAULT_SETTINGS.gameMode;
+  // 舊版把「困難賽道」綁在陀螺儀操控模式；新版陀螺儀只是標籤，不再限定賽道
+  return merged;
+}
+
+/** 存檔前先確認地獄模式有沒有解鎖，沒解鎖就退回標準 */
+function sanitizeGameMode(settings, bests) {
+  if (!isModeUnlocked(settings.gameMode, bests)) settings.gameMode = DEFAULT_SETTINGS.gameMode;
+}
+
+function saveSettings(settings) {
+  storage.set(SETTINGS_KEY, settings);
+}
+
+const num = (v) => (Number.isFinite(v) && v > 0 ? Math.floor(v) : 0);
+
+/** { standard, turbo, nightmare }；第一次升級時把舊的單一紀錄算在標準模式 */
+function loadBests() {
+  const saved = storage.get(BESTS_KEY, null);
+  if (saved && typeof saved === 'object') {
+    return { standard: num(saved.standard), turbo: num(saved.turbo), nightmare: num(saved.nightmare) };
+  }
+  return { standard: num(storage.get(BEST_KEY, 0)), turbo: 0, nightmare: 0 };
+}
+
+const saveBests = (bests) => storage.set(BESTS_KEY, bests);
+
+// ── wav.js ──
+function peakOf(samples) {
+  let peak = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const v = Math.abs(samples[i]);
+    if (v > peak) peak = v;
+  }
+  return peak;
+}
+
+/** 兩軌相加；總音量超過 0.95 時整體縮小，避免爆音 */
+function mixTracks(a, b, gainA = 1, gainB = 0.7) {
+  const out = new Float32Array(Math.max(a ? a.length : 0, b ? b.length : 0));
+  if (a) for (let i = 0; i < a.length; i++) out[i] += a[i] * gainA;
+  if (b) for (let i = 0; i < b.length; i++) out[i] += b[i] * gainB;
+  const peak = peakOf(out);
+  if (peak > 0.95) {
+    const k = 0.95 / peak;
+    for (let i = 0; i < out.length; i++) out[i] *= k;
+  }
+  return out;
+}
+
+/** 單聲道 16-bit PCM WAV */
+function encodeWav(samples, sampleRate) {
+  const n = samples.length;
+  const buffer = new ArrayBuffer(44 + n * 2);
+  const view = new DataView(buffer);
+  const text = (offset, str) => {
+    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+  };
+  text(0, 'RIFF');
+  view.setUint32(4, 36 + n * 2, true);
+  text(8, 'WAVE');
+  text(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, 1, true); // 單聲道
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  text(36, 'data');
+  view.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) {
+    const v = clamp(samples[i], -1, 1);
+    view.setInt16(44 + i * 2, v < 0 ? v * 0x8000 : v * 0x7fff, true);
+  }
+  return new Blob([buffer], { type: 'audio/wav' });
+}
+
+// ── clipstore.js ──
+const DB_NAME = 'kids-downstairs-audio';
+const DB_STORE = 'clips';
+const LS_PREFIX = 'kids-downstairs.clip.';
+
+/**
+ * 自訂錄音的本機儲存。錄音只存在這台裝置：
+ * 1. 優先存 localStorage（Base64；每段最長 1.5 秒、約幾十 KB，三個槽位 × 兩種情境放得下）
+ * 2. localStorage 滿了或不能用時，改存 IndexedDB（直接存 Blob）
+ * 3. 兩者都不行就只放記憶體，重新整理後會消失
+ * 兩邊都有同一個 id 時以 localStorage 為準（舊版本把錄音存在 IndexedDB）。
+ */
+class ClipStore {
+  constructor() {
+    this.dbPromise = null;
+    this.memory = new Map();
+  }
+
+  open() {
+    if (!this.dbPromise) {
+      this.dbPromise = new Promise((resolve) => {
+        try {
+          const req = indexedDB.open(DB_NAME, 1);
+          req.onupgradeneeded = () => req.result.createObjectStore(DB_STORE, { keyPath: 'id' });
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => resolve(null);
+          req.onblocked = () => resolve(null);
+        } catch {
+          resolve(null);
+        }
+      });
+    }
+    return this.dbPromise;
+  }
+
+  request(db, mode, run) {
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(DB_STORE, mode);
+      const req = run(tx.objectStore(DB_STORE));
+      tx.oncomplete = () => resolve(req.result);
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  }
+
+  async getAll() {
+    const rows = new Map();
+    const db = await this.open();
+    if (db) {
+      try {
+        const list = await this.request(db, 'readonly', (store) => store.getAll());
+        for (const row of list || []) rows.set(row.id, row.blob);
+      } catch {
+        /* 讀不到就當作沒有 */
+      }
+    }
+    for (const [id, blob] of readLocal()) rows.set(id, blob);
+    for (const [id, blob] of this.memory) if (!rows.has(id)) rows.set(id, blob);
+    return rows;
+  }
+
+  async put(id, blob) {
+    try {
+      localStorage.setItem(LS_PREFIX + id, await blobToJson(blob));
+      this.memory.delete(id);
+      this.dropFromDb(id); // 清掉舊版留在 IndexedDB 的同名錄音，免得下次讀回舊的
+      return 'localstorage';
+    } catch {
+      /* 空間不夠或不能用，往下試 IndexedDB */
+    }
+    const db = await this.open();
+    if (db) {
+      try {
+        await this.request(db, 'readwrite', (store) => store.put({ id, blob, savedAt: Date.now() }));
+        return 'indexeddb';
+      } catch {
+        /* 往下放記憶體 */
+      }
+    }
+    this.memory.set(id, blob);
+    return 'memory';
+  }
+
+  async dropFromDb(id) {
+    const db = await this.open();
+    if (!db) return;
+    try {
+      await this.request(db, 'readwrite', (store) => store.delete(id));
+    } catch {
+      /* 略過 */
+    }
+  }
+
+  async delete(id) {
+    this.memory.delete(id);
+    try {
+      localStorage.removeItem(LS_PREFIX + id);
+    } catch {
+      /* 略過 */
+    }
+    const db = await this.open();
+    if (!db) return;
+    try {
+      await this.request(db, 'readwrite', (store) => store.delete(id));
+    } catch {
+      /* 略過 */
+    }
+  }
+}
+
+function blobToJson(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = String(reader.result);
+      resolve(JSON.stringify({ type: blob.type, data: url.slice(url.indexOf(',') + 1) }));
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+function readLocal() {
+  const out = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith(LS_PREFIX)) continue;
+      const { type, data } = JSON.parse(localStorage.getItem(key));
+      const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+      out.push([key.slice(LS_PREFIX.length), new Blob([bytes], { type })]);
+    }
+  } catch {
+    /* 略過壞掉的資料 */
+  }
+  return out;
+}
+
+// ── audio.js ──
+const AudioCtor = typeof window !== 'undefined' ? window.AudioContext || window.webkitAudioContext : null;
+const OfflineCtor =
+  typeof window !== 'undefined' ? window.OfflineAudioContext || window.webkitOfflineAudioContext : null;
+
+const slotId = (kind, slot) => `${kind}-${slot}`;
+const ALL_SLOT_IDS = CLIP_KINDS.flatMap((k) => AUDIO.SLOTS.map((s) => slotId(k.id, s)));
+
+// ───────── 預設合成音效 ─────────
+// 都只用 BaseAudioContext 的 API，所以即時播放與離線重新渲染（死前重播的音效軌）共用同一份程式。
+
+function tone(ctx, out, t, { freq, freqEnd, dur, type = 'square', gain = 0.2 }, rate = 1) {
+  // rate > 1：音高與速度一起提高（頻率乘 rate、時間除以 rate），和 AudioBufferSourceNode.playbackRate 的效果一致
+  freq *= rate;
+  if (freqEnd) freqEnd *= rate;
+  dur /= rate;
+  const osc = ctx.createOscillator();
+  const amp = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t);
+  if (freqEnd) osc.frequency.exponentialRampToValueAtTime(freqEnd, t + dur);
+  amp.gain.setValueAtTime(0.0001, t);
+  amp.gain.exponentialRampToValueAtTime(gain, t + 0.008);
+  amp.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  osc.connect(amp);
+  amp.connect(out);
+  osc.start(t);
+  osc.stop(t + dur + 0.02);
+}
+
+function noiseBurst(ctx, out, t, dur, gain, cutoff) {
+  const length = Math.max(1, Math.round(ctx.sampleRate * dur));
+  const buffer = ctx.createBuffer(1, length, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+  const src = ctx.createBufferSource();
+  src.buffer = buffer;
+  const filter = ctx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.value = cutoff;
+  const amp = ctx.createGain();
+  amp.gain.setValueAtTime(gain, t);
+  amp.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  src.connect(filter);
+  filter.connect(amp);
+  amp.connect(out);
+  src.start(t);
+}
+
+/**
+ * 自訂語音的基礎音高：從 1.0 倍隨層數線性提高，VOICE_RATE_FLOORS 層時達到上限 VOICE_RATE_MAX（1.8 倍）。
+ * 只有玩家錄的自訂語音會變調；遊戲內建的合成音效一律固定音高與原速。
+ */
+function voiceRate(floor) {
+  const f = Math.max(0, floor || 0);
+  return 1 + (AUDIO.VOICE_RATE_MAX - 1) * Math.min(1, f / AUDIO.VOICE_RATE_FLOORS);
+}
+
+/** 電音破音強度：min(層數 / 100, 4)；最低保留 0.5，剛開始時也聽得出效果 */
+function crushLevel(floor) {
+  return Math.max(0.5, Math.min(Math.max(0, floor || 0) / 100, AUDIO.CRUSH_MAX_LEVEL));
+}
+
+// ───────── 自訂語音的特殊效果（AudioBuffer 加工，快取） ─────────
+
+const reversedCache = new WeakMap();
+/** 倒放：把 AudioBuffer 每個聲道的陣列反轉 */
+function reversedBuffer(ctx, buffer) {
+  let out = reversedCache.get(buffer);
+  if (!out) {
+    out = ctx.createBuffer(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
+    for (let c = 0; c < buffer.numberOfChannels; c++) out.copyToChannel(buffer.getChannelData(c).slice().reverse(), c);
+    reversedCache.set(buffer, out);
+  }
+  return out;
+}
+
+const crushedCache = new WeakMap();
+/** 降低取樣率：每 factor 個樣本只取第一個並保持（sample & hold）。位元深度由 WaveShaperNode 負責 */
+function crushedBuffer(ctx, buffer, factor) {
+  let byFactor = crushedCache.get(buffer);
+  if (!byFactor) crushedCache.set(buffer, (byFactor = new Map()));
+  let out = byFactor.get(factor);
+  if (!out) {
+    out = ctx.createBuffer(buffer.numberOfChannels, buffer.length, buffer.sampleRate);
+    for (let c = 0; c < buffer.numberOfChannels; c++) {
+      const src = buffer.getChannelData(c);
+      const dst = new Float32Array(src.length);
+      for (let i = 0; i < src.length; i++) dst[i] = src[i - (i % factor)];
+      out.copyToChannel(dst, c);
+    }
+    byFactor.set(factor, out);
+  }
+  return out;
+}
+
+const stretchCache = new WeakMap();
+/**
+ * 保持音高的變速（WSOLA 時間伸縮）：把 buffer 從 offset 秒開始的 maxSec 秒內容拉長 factor 倍，音高不變。
+ * 視窗 STRETCH_FRAME 秒、Hann 窗、50% 重疊相加；每個視窗在 ±1/4 視窗內找跟上一個視窗自然接續最像的位置，波形才接得起來。
+ * 結果依 (offset, factor, maxSec) 快取。
+ */
+function timeStretch(ctx, buffer, offset, factor, maxSec) {
+  let byKey = stretchCache.get(buffer);
+  if (!byKey) stretchCache.set(buffer, (byKey = new Map()));
+  const key = `${offset.toFixed(3)}|${factor.toFixed(3)}|${maxSec ?? 'all'}`;
+  let out = byKey.get(key);
+  if (out) return out;
+  const sr = buffer.sampleRate;
+  const start = Math.min(buffer.length, Math.max(0, Math.round(offset * sr)));
+  const end = maxSec === undefined ? buffer.length : Math.min(buffer.length, start + Math.round(maxSec * sr));
+  const n = Math.max(0, end - start);
+  const N = Math.max(64, Math.round(sr * AUDIO.STRETCH_FRAME) & ~1);
+  const Hs = N / 2; // 輸出的步長
+  const Ha = Hs / factor; // 輸入的步長
+  const tol = N >> 2;
+  const outLen = Math.max(1, Math.ceil(n * factor));
+  out = ctx.createBuffer(buffer.numberOfChannels, outLen, sr);
+  const win = new Float32Array(N);
+  for (let i = 0; i < N; i++) win[i] = 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / N);
+  const channels = [];
+  for (let c = 0; c < buffer.numberOfChannels; c++) channels.push(buffer.getChannelData(c).subarray(start, end));
+  const ref0 = channels[0];
+  const dst = channels.map(() => new Float32Array(outLen + N));
+  let prev = 0;
+  for (let k = 0; ; k++) {
+    const nominal = Math.round(k * Ha);
+    if (nominal >= n || k * Hs >= outLen) break;
+    let pos = nominal;
+    if (k > 0) {
+      const ref = prev + Hs; // 上一個視窗「自然接續」的位置
+      let best = -Infinity;
+      for (let d = -tol; d <= tol; d += 2) {
+        const cand = nominal + d;
+        if (cand < 0 || cand + Hs > n || ref + Hs > n) continue;
+        let corr = 0;
+        for (let i = 0; i < Hs; i += 4) corr += ref0[ref + i] * ref0[cand + i];
+        if (corr > best) {
+          best = corr;
+          pos = cand;
+        }
+      }
+    }
+    prev = pos;
+    for (let c = 0; c < channels.length; c++) {
+      const src = channels[c];
+      const d = dst[c];
+      for (let i = 0; i < N; i++) {
+        const j = pos + i;
+        if (j >= n) break;
+        d[k * Hs + i] += (k === 0 && i < Hs ? 1 : win[i]) * src[j]; // 第一個視窗的前半不淡入
+      }
+    }
+  }
+  for (let c = 0; c < channels.length; c++) out.copyToChannel(dst[c].subarray(0, outLen), c);
+  byKey.set(key, out);
+  return out;
+}
+
+/** 位元壓縮曲線：8 位元起，強度越高位元越少（最低 2 位元） */
+function bitcrushCurve(level) {
+  const bits = Math.max(2, 8 - level * 1.5);
+  const steps = 2 ** bits / 2;
+  const curve = new Float32Array(2048);
+  for (let i = 0; i < curve.length; i++) {
+    const x = (i / (curve.length - 1)) * 2 - 1;
+    curve[i] = Math.round(x * steps) / steps;
+  }
+  return curve;
+}
+
+const SYNTH = {
+  safe: (c, o, t, r) => tone(c, o, t, { freq: 660, freqEnd: 880, dur: 0.07, type: 'square', gain: 0.16 }, r),
+  jump: (c, o, t, r) => tone(c, o, t, { freq: 420, freqEnd: 980, dur: 0.16, type: 'triangle', gain: 0.24 }, r),
+  hurt: (c, o, t) => {
+    noiseBurst(c, o, t, 0.18, 0.5, 900);
+    tone(c, o, t, { freq: 180, freqEnd: 60, dur: 0.22, type: 'sawtooth', gain: 0.4 });
+  },
+  heal: (c, o, t) =>
+    [523, 659, 784].forEach((f, i) => tone(c, o, t + i * 0.07, { freq: f, dur: 0.09, type: 'triangle', gain: 0.25 })),
+  tick: (c, o, t) => tone(c, o, t, { freq: 440, dur: 0.09, type: 'sine', gain: 0.25 }),
+  go: (c, o, t) => tone(c, o, t, { freq: 880, dur: 0.25, type: 'square', gain: 0.18 }),
+  over: (c, o, t) =>
+    [392, 330, 262, 196].forEach((f, i) => tone(c, o, t + i * 0.14, { freq: f, dur: 0.18, type: 'sawtooth', gain: 0.25 })),
+};
+
+/**
+ * 自訂語音：全域最多同時 VOICE_MAX（3）個。state.voices 依開始順序追蹤正在播的語音；
+ * 新語音一來，先清掉已經播完的；如果還有 3 個在播，就把最早的那個 VOICE_FADE（0.03）秒內淡出並 stop()、從陣列移除，
+ * 新的語音馬上開始。語音播完（onended）也會自動從陣列移除，釋放額度。
+ *   v = { rate, reverse, crush, stutter, swell, bend, muffle, low }
+ * 回傳 handle { endAt, stop(t) }。
+ */
+function startVoice(ctx, out, t, ev, state) {
+  const v = ev.voice || {};
+  const voices = state.voices || (state.voices = []);
+  for (let i = voices.length - 1; i >= 0; i--) if (voices[i].endAt <= t) voices.splice(i, 1);
+  while (voices.length >= AUDIO.VOICE_MAX) voices.shift().stop(t); // 最早的淡出切斷
+  const start = t;
+  let buffer = v.reverse ? reversedBuffer(ctx, ev.buffer) : ev.buffer;
+  if (v.crush) buffer = crushedBuffer(ctx, buffer, 1 + Math.floor(v.crush * 2));
+  const baseRate = v.low ? AUDIO.LOW_RATE : v.muffle ? AUDIO.SLIME_VOICE_RATE : v.rate || 1;
+
+  const vg = ctx.createGain(); // 這個語音專屬的音量：淡出用
+  vg.gain.setValueAtTime(1, start);
+  vg.connect(out);
+  let tail = vg;
+  const nodes = [];
+  const oscs = []; // 要在結束時一起 stop 的振盪器
+  if (v.low || v.muffle) {
+    const lp = ctx.createBiquadFilter(); // 低血量：濾掉刺耳高頻；泥沼：悶悶的泥濘感
+    lp.type = 'lowpass';
+    lp.frequency.value = v.low && v.muffle ? Math.min(AUDIO.LOW_CUTOFF, AUDIO.SLIME_VOICE_CUTOFF) : v.low ? AUDIO.LOW_CUTOFF : AUDIO.SLIME_VOICE_CUTOFF;
+    lp.connect(vg);
+    tail = lp;
+  }
+  if (v.muffle) {
+    // 泥沼：用 8~12Hz 的 LFO 讓音量微幅快速抖動
+    const tg = ctx.createGain();
+    tg.gain.value = 1 - AUDIO.SLIME_TREMOLO_DEPTH;
+    const lfo = ctx.createOscillator();
+    const depth = ctx.createGain();
+    lfo.frequency.value = AUDIO.SLIME_TREMOLO_HZ;
+    depth.gain.value = AUDIO.SLIME_TREMOLO_DEPTH;
+    lfo.connect(depth);
+    depth.connect(tg.gain);
+    tg.connect(tail);
+    tail = tg;
+    oscs.push(lfo);
+    nodes.push(tg, depth);
+  }
+  let head = tail;
+  let ring = null;
+  if (v.crush) {
+    // 電音：WaveShaper 壓位元 → 一半直通、一半與 30~100Hz OscillatorNode 相乘（環形調變）
+    const shaper = ctx.createWaveShaper();
+    shaper.curve = bitcrushCurve(v.crush);
+    const mix = ctx.createGain();
+    mix.connect(tail);
+    const dry = ctx.createGain();
+    dry.gain.value = 0.45;
+    const wet = ctx.createGain();
+    wet.gain.value = 0.9;
+    const mod = ctx.createGain();
+    mod.gain.value = 0; // 載波增益 0，只剩振盪器的輸出 → 純環形調變
+    ring = ctx.createOscillator();
+    ring.type = 'square';
+    ring.frequency.value = 30 + 70 * Math.min(1, v.crush / AUDIO.CRUSH_MAX_LEVEL);
+    ring.connect(mod.gain);
+    shaper.connect(dry);
+    dry.connect(mix);
+    shaper.connect(mod);
+    mod.connect(wet);
+    wet.connect(mix);
+    head = shaper;
+    oscs.push(ring);
+    nodes.push(shaper, mix, dry, wet, mod);
+  }
+  const sources = [];
+  /** 建一個播放來源：buf 從 offset 秒開始（dur 秒），播放速率 rate；shape(rateParam, when) 排程速率變化 */
+  const addSource = (buf, when, offset, dur, rate, shape, dest = head) => {
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = rate;
+    if (shape) shape(src.playbackRate, when);
+    src.connect(dest);
+    if (dur === undefined) src.start(when, offset);
+    else src.start(when, offset, dur);
+    sources.push(src);
+    return src;
+  };
+  const len = buffer.duration;
+  let at = start;
+  let endAt;
+  if (v.stutter) {
+    // 卡帶抽蓄：開頭 STUTTER_SECONDS 秒重複 2~3 次，再播完整語音
+    const seg = Math.min(AUDIO.STUTTER_SECONDS, len);
+    for (let i = 0; i < v.stutter; i++) {
+      addSource(buffer, at, 0, seg, baseRate);
+      at += seg / baseRate + 0.04;
+    }
+  }
+  if (v.swell) {
+    // 彈簧：前段 0.5 倍速但音高不變（時間伸縮），接著恢復成基礎速度（彈飛出去）
+    const headLen = Math.min(v.swell, len * AUDIO.SPRING_HEAD_RATIO);
+    const slow = timeStretch(ctx, buffer, 0, 1 / AUDIO.SPRING_SLOW, headLen);
+    addSource(slow, at, 0, undefined, 1);
+    at += slow.duration;
+    addSource(buffer, at, headLen, undefined, baseRate);
+    endAt = at + (len - headLen) / baseRate;
+  } else if (v.bend) {
+    // 冰面：播放速率 1.0x → 1.5x（音高跟著升高），再降到 0.6x 速度，但 0.6x 的部分用時間伸縮，音高不再掉下去
+    const up = AUDIO.ICE_BEND_UP_SECONDS;
+    const down = AUDIO.ICE_BEND_DOWN_SECONDS;
+    const top = baseRate * AUDIO.ICE_BEND_UP;
+    const eaten = (up * (baseRate + top)) / 2; // 上升段用掉的錄音長度
+    const first = addSource(buffer, at, 0, undefined, baseRate, (rate, when) => {
+      rate.setValueAtTime(baseRate, when);
+      rate.linearRampToValueAtTime(top, when + up);
+    });
+    first.stop(at + up);
+    if (eaten < len) {
+      const rest = timeStretch(ctx, buffer, eaten, 1 / AUDIO.ICE_BEND_DOWN);
+      // 伸縮後的內容以 baseRate 播出 = 0.6x 速度；開頭從高音（top）滑回正常音高
+      addSource(rest, at + up, 0, undefined, top, (rate, when) => {
+        rate.setValueAtTime(top, when);
+        rate.linearRampToValueAtTime(baseRate, when + down);
+      });
+      endAt = at + up + down + Math.max(0, rest.duration - (down * (top + baseRate)) / 2) / baseRate;
+    } else endAt = at + up;
+  } else {
+    addSource(buffer, at, 0, undefined, baseRate);
+    endAt = at + len / baseRate;
+    if (v.muffle) {
+      // 泥沼：每 0.15 秒疊上一小段「往回一點」的語音片段，像被黏住、斷斷續續抖動
+      const iv = AUDIO.SLIME_LOOP_INTERVAL;
+      for (let k = 1; at + k * iv < endAt - 0.02; k++) {
+        const when = at + k * iv;
+        const from = Math.max(0, k * iv * baseRate - AUDIO.SLIME_LOOP_BACK);
+        const grainGain = ctx.createGain();
+        grainGain.gain.value = 0.5;
+        grainGain.connect(head);
+        nodes.push(grainGain);
+        const g = addSource(buffer, when, from, AUDIO.SLIME_LOOP_LENGTH, baseRate, null, grainGain);
+        g.stop(when + AUDIO.SLIME_LOOP_LENGTH / baseRate);
+      }
+    }
+  }
+  if (v.low) endAt = Math.min(endAt, start + AUDIO.LOW_MAX_SECONDS); // 最長只播 LOW_MAX_SECONDS 秒
+  oscs.forEach((o) => o.start(start));
+  const kill = (when) => {
+    sources.forEach((s) => {
+      try {
+        s.stop(when);
+      } catch {
+        /* 已經結束 */
+      }
+    });
+    oscs.forEach((o) => o.stop(when));
+  };
+  const handle = { endAt, stop: null, nodes };
+  if (v.low) {
+    vg.gain.setValueAtTime(1, Math.max(start, endAt - 0.03));
+    vg.gain.linearRampToValueAtTime(0, endAt);
+    kill(endAt);
+  }
+  handle.stop = (when) => {
+    // 淡出並關閉，同時從通道清單移除
+    vg.gain.cancelScheduledValues(when);
+    vg.gain.setValueAtTime(1, when);
+    vg.gain.linearRampToValueAtTime(0, when + AUDIO.VOICE_FADE);
+    kill(when + AUDIO.VOICE_FADE);
+    handle.endAt = Math.min(handle.endAt, when + AUDIO.VOICE_FADE);
+    const i = voices.indexOf(handle);
+    if (i >= 0) voices.splice(i, 1);
+  };
+  // 所有來源都播完（onended）就自動釋放額度
+  let remaining = sources.length;
+  sources.forEach((src) => {
+    src.onended = () => {
+      remaining -= 1;
+      const i = voices.indexOf(handle);
+      if (remaining <= 0 && i >= 0) voices.splice(i, 1);
+    };
+  });
+  voices.push(handle);
+  return handle;
+}
+
+/** ev = { kind, buffer?, rate?, voice? }：有 buffer 就播自訂錄音（走獨佔通道 + 特殊效果），否則播該 kind 的預設合成音 */
+function startSound(ctx, out, t, ev, state = { voices: [] }) {
+  if (ev.buffer) {
+    startVoice(ctx, out, t, ev, state);
+  } else if (SYNTH[ev.kind]) {
+    SYNTH[ev.kind](ctx, out, t, ev.rate || 1);
+  }
+}
+
+function pickRecorderMime() {
+  if (typeof MediaRecorder === 'undefined') return '';
+  const list = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
+  return list.find((m) => MediaRecorder.isTypeSupported(m)) || '';
+}
+
+/** 限幅：DynamicsCompressor 接在輸出前，避免多個語音疊加時爆音 */
+function limiter(ctx, dest) {
+  if (!ctx.createDynamicsCompressor) return dest;
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -10;
+  comp.knee.value = 6;
+  comp.ratio.value = 12;
+  comp.attack.value = 0.003;
+  comp.release.value = 0.1;
+  comp.connect(dest);
+  return comp;
+}
+
+/**
+ * 全局音訊管理：
+ * - 解鎖 AudioContext（iOS / Safari 必須在使用者手勢內 resume）
+ * - 預設合成音效，以及踩平台 / 受傷各 3 個自訂錄音槽位（隨機挑一個播）
+ * - 麥克風：自訂錄音（MediaRecorder）與死前 10 秒環形緩衝（PCM）
+ * 所有音訊都只在本機處理，沒有任何網路請求。
+ */
+class AudioManager {
+  constructor() {
+    this.supported = Boolean(AudioCtor);
+    this.enabled = true;
+    this.voiceState = { voices: [] }; // 自訂語音的通道：最多同時 3 個
+    this.crushUntil = 0;               // 雷射電音 Buff 的結束時間（AudioContext 時鐘）
+    this.voiceUnlocked = false; // 最高紀錄 B30 以上才播自訂語音包（modes.js 的 isVoicePackUnlocked）
+    this.ctx = null;
+    this.out = null;
+
+    this.store = new ClipStore();
+    this.blobs = new Map();   // 槽位 id → 錄音 Blob
+    this.buffers = new Map(); // 槽位 id → 解碼後的 AudioBuffer
+    this.onClipsChange = null;
+
+    this.mic = { state: 'off', stream: null, source: null };
+    this.onMicChange = null;
+
+    // 死前重播：Track A（麥克風）放環形緩衝；Track B（遊戲音效）只記事件，匯出時離線重新渲染
+    this.capturing = false;
+    this.ring = null;
+    this.ringPos = 0;
+    this.clockSamples = 0;
+    this.cbTime = 0;
+    this.micSamples = 0;
+    this.events = [];
+
+    this.clipRec = null;
+    this.clipDone = null;
+    this.replaySource = null;
+  }
+
+  // ───────── 解鎖與建立 ─────────
+
+  ensureCtx() {
+    if (this.ctx || !this.supported) return this.ctx;
+    this.ctx = new AudioCtor();
+    this.out = this.ctx.createGain();
+    this.out.gain.value = 0.9;
+    // 最多 3 個語音 + 電音疊在一起容易爆音：過一個壓縮器當限幅
+    this.out.connect(limiter(this.ctx, this.ctx.destination));
+    this.buildCapture();
+    return this.ctx;
+  }
+
+  /** 要在點擊 / 觸控 / 按鍵等使用者手勢裡呼叫。重複呼叫沒有副作用 */
+  unlock() {
+    const ctx = this.ensureCtx();
+    if (!ctx) return Promise.resolve(false);
+    const ready = ctx.state === 'running' ? Promise.resolve() : ctx.resume().catch(() => {});
+    return ready.then(() => {
+      if (!this.unlocked) {
+        this.unlocked = true;
+        // iOS：播一小段無聲音訊，才算真的解鎖
+        const buf = ctx.createBuffer(1, 1, ctx.sampleRate);
+        const src = ctx.createBufferSource();
+        src.buffer = buf;
+        src.connect(ctx.destination);
+        src.start(0);
+      }
+      return this.decodePending().then(() => ctx.state === 'running');
+    });
+  }
+
+  get running() {
+    return Boolean(this.ctx) && this.ctx.state === 'running';
+  }
+
+  // ───────── 音效播放 ─────────
+
+  pickEvent(kind) {
+    const ids = AUDIO.SLOTS.map((s) => slotId(kind, s)).filter((id) => this.buffers.has(id));
+    if (ids.length) return { kind, buffer: this.buffers.get(ids[Math.floor(Math.random() * ids.length)]) };
+    return { kind, buffer: null };
+  }
+
+  /**
+   * 這次自訂語音要套用哪些效果（依踩到的平台）：
+   *   低血量（<= 2/6）：強制 0.5 倍速 + 低通 + 最長 0.8 秒（無視基礎高音高）
+   *   傳送門 >= 300F：100% 倒放
+   *   雷射：之後 5 秒內任何平台的語音都套用電音
+   *   碎石：40% 口吃（前 0.5 秒重複 2~3 次後再播完整語音）；其他平台絕不口吃
+   *   彈簧：100% 前段半速、後段恢復
+   *   冰面：100% 尾音滑腔（1.0x → 1.5x → 0.6x）
+   *   泥沼：100% 低通 800Hz + 顫音，速度只降到 0.85x
+   */
+  voiceFx(kind, floor, info = {}) {
+    const src = info.platform && typeof info.platform === 'object' ? info.platform : null;
+    const pk = kind === 'safe' && src ? src.kind : null;
+    const now = this.ctx.currentTime;
+    if (src && src.kind === Kind.LASER) this.crushUntil = now + AUDIO.CRUSH_BUFF_SECONDS;
+    const fx = { rate: voiceRate(floor) };
+    if (info.hp !== undefined && info.hp <= AUDIO.LOW_HP) fx.low = true;
+    if (pk === Kind.PORTAL && floor >= AUDIO.REVERSE_FLOOR) fx.reverse = true;
+    if (now < this.crushUntil) fx.crush = crushLevel(floor);
+    if (pk === Kind.FLIP && Math.random() < AUDIO.STUTTER_CHANCE) fx.stutter = Math.random() < 0.5 ? 2 : 3;
+    if (pk === Kind.SPRING && !fx.low) fx.swell = AUDIO.SPRING_HEAD_MAX;
+    if (pk === Kind.ICE && !fx.low) fx.bend = true;
+    if (pk === Kind.SLIME) fx.muffle = true;
+    return fx;
+  }
+
+  /**
+   * kind: safe | jump | hurt | heal | tick | go | over。safe 和 hurt 在解鎖後優先播自訂錄音。
+   * floor：目前層數。info = { platform, hp }：踩到 / 傷到的平台與目前血量（自訂語音的特殊效果用）。
+   * 內建合成音效固定音高與原速；只有自訂語音會隨層數變調、套用特殊效果。
+   */
+  play(kind, floor = 0, info = {}) {
+    if (!this.enabled || !this.running) return;
+    const custom = this.voiceUnlocked && (kind === 'safe' || kind === 'hurt');
+    const ev = custom ? this.pickEvent(kind) : { kind, buffer: null };
+    if (ev.buffer) ev.voice = this.voiceFx(kind, floor, info);
+    startSound(this.ctx, this.out, this.ctx.currentTime, ev, this.voiceState);
+    if (this.capturing) {
+      this.events.push({ ...ev, t: this.clockNow() });
+      const cutoff = this.clockNow() - AUDIO.REPLAY_SECONDS - 2;
+      while (this.events.length && this.events[0].t < cutoff) this.events.shift();
+    }
+  }
+
+  previewClip(id) {
+    const buffer = this.buffers.get(id);
+    if (!buffer || !this.running) return false;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(this.ctx.destination);
+    src.start();
+    return true;
+  }
+
+  // ───────── 自訂錄音槽位 ─────────
+
+  hasClip(id) {
+    return this.blobs.has(id) || this.buffers.has(id);
+  }
+
+  clipSeconds(id) {
+    const buffer = this.buffers.get(id);
+    return buffer ? buffer.duration : null;
+  }
+
+  async loadStored() {
+    const rows = await this.store.getAll();
+    for (const [id, blob] of rows) if (ALL_SLOT_IDS.includes(id)) this.blobs.set(id, blob);
+    if (this.onClipsChange) this.onClipsChange();
+  }
+
+  /** 解碼已儲存的錄音。decodeAudioData 要有 AudioContext，所以等解鎖後才做 */
+  async decodePending() {
+    if (!this.ctx) return;
+    let changed = false;
+    for (const [id, blob] of this.blobs) {
+      if (this.buffers.has(id)) continue;
+      try {
+        const buffer = await this.ctx.decodeAudioData(await blob.arrayBuffer());
+        this.buffers.set(id, buffer);
+        changed = true;
+      } catch {
+        this.blobs.delete(id);
+        this.store.delete(id);
+        changed = true;
+      }
+    }
+    if (changed && this.onClipsChange) this.onClipsChange();
+  }
+
+  /** 按住開始錄；回傳 false 代表現在不能錄。結果由 this.clipDone 取得 */
+  startClip(id) {
+    if (this.clipRec || this.mic.state !== 'on' || typeof MediaRecorder === 'undefined') return false;
+    this.ensureCtx();
+    const mime = pickRecorderMime();
+    const stream = new MediaStream(this.mic.stream.getAudioTracks());
+    let rec;
+    try {
+      rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    } catch {
+      return false;
+    }
+    const chunks = [];
+    rec.ondataavailable = (e) => {
+      if (e.data && e.data.size) chunks.push(e.data);
+    };
+    const timer = setTimeout(() => this.stopClip(id), AUDIO.CLIP_MAX_SECONDS * 1000);
+    this.clipDone = new Promise((resolve) => {
+      rec.onstop = async () => {
+        clearTimeout(timer);
+        this.clipRec = null;
+        resolve(await this.finishClip(id, new Blob(chunks, { type: rec.mimeType || mime || 'audio/webm' })));
+      };
+      rec.onerror = () => {
+        clearTimeout(timer);
+        this.clipRec = null;
+        resolve({ ok: false, reason: 'error' });
+      };
+    });
+    this.clipRec = { id, rec };
+    rec.start();
+    return true;
+  }
+
+  stopClip(id) {
+    const cur = this.clipRec;
+    if (!cur || cur.id !== id) return;
+    if (cur.rec.state === 'recording') cur.rec.stop();
+  }
+
+  async finishClip(id, blob) {
+    if (!blob.size) return { ok: false, reason: 'short' };
+    let buffer;
+    try {
+      buffer = await this.ctx.decodeAudioData(await blob.arrayBuffer());
+    } catch {
+      return { ok: false, reason: 'decode' };
+    }
+    if (buffer.duration < AUDIO.CLIP_MIN_SECONDS) return { ok: false, reason: 'short' };
+    this.blobs.set(id, blob);
+    this.buffers.set(id, buffer);
+    const where = await this.store.put(id, blob);
+    if (this.onClipsChange) this.onClipsChange();
+    return { ok: true, seconds: buffer.duration, where };
+  }
+
+  async deleteClip(id) {
+    this.blobs.delete(id);
+    this.buffers.delete(id);
+    await this.store.delete(id);
+    if (this.onClipsChange) this.onClipsChange();
+  }
+
+  // ───────── 麥克風 ─────────
+
+  setMic(state, detail = '') {
+    this.mic.state = state;
+    if (this.onMicChange) this.onMicChange(state, detail);
+  }
+
+  /** 要在使用者手勢內呼叫（會跳出瀏覽器的權限視窗） */
+  async enableMic() {
+    if (this.mic.state === 'on') return true;
+    if (!this.supported || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      this.setMic('unavailable');
+      return false;
+    }
+    this.ensureCtx();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: true },
+      });
+      this.mic.stream = stream;
+      this.mic.source = this.ctx.createMediaStreamSource(stream);
+      this.mic.source.connect(this.mixIn);
+      stream.getAudioTracks().forEach((t) => t.addEventListener('ended', () => this.disableMic()));
+      this.setMic('on');
+      return true;
+    } catch (err) {
+      const denied = err && (err.name === 'NotAllowedError' || err.name === 'SecurityError');
+      this.setMic(denied ? 'denied' : 'unavailable', err && err.name);
+      return false;
+    }
+  }
+
+  /** 已經允許過的話，不跳視窗直接接上麥克風 */
+  async enableMicIfGranted() {
+    if (this.mic.state === 'on' || !navigator.permissions || !navigator.permissions.query) return false;
+    try {
+      const status = await navigator.permissions.query({ name: 'microphone' });
+      if (status.state === 'granted') return this.enableMic();
+    } catch {
+      /* 部分瀏覽器不支援查詢 */
+    }
+    return false;
+  }
+
+  disableMic() {
+    if (this.mic.source) this.mic.source.disconnect();
+    if (this.mic.stream) this.mic.stream.getTracks().forEach((t) => t.stop());
+    this.mic.source = null;
+    this.mic.stream = null;
+    this.setMic('off');
+  }
+
+  // ───────── 死前 10 秒：環形緩衝 ─────────
+
+  buildCapture() {
+    const ctx = this.ctx;
+    this.sr = ctx.sampleRate;
+    this.ring = new Float32Array(Math.round(this.sr * AUDIO.REPLAY_SECONDS));
+    this.mixIn = ctx.createGain();
+    // 沒有麥克風時也要讓時鐘照常走，所以永遠接一條無聲的訊號
+    const silent = ctx.createOscillator();
+    const silentGain = ctx.createGain();
+    silentGain.gain.value = 0;
+    silent.connect(silentGain);
+    silentGain.connect(this.mixIn);
+    silent.start();
+    this.tap = ctx.createScriptProcessor(AUDIO.TAP_SIZE, 1, 1);
+    this.tap.onaudioprocess = (e) => this.onTap(e);
+    const mute = ctx.createGain();
+    mute.gain.value = 0;
+    this.mixIn.connect(this.tap);
+    this.tap.connect(mute);
+    mute.connect(ctx.destination);
+  }
+
+  onTap(e) {
+    if (!this.capturing) return;
+    const input = e.inputBuffer.getChannelData(0);
+    const micOn = this.mic.state === 'on';
+    const ring = this.ring;
+    let pos = this.ringPos;
+    for (let i = 0; i < input.length; i++) {
+      ring[pos] = micOn ? input[i] : 0;
+      pos = pos + 1 === ring.length ? 0 : pos + 1;
+    }
+    this.ringPos = pos;
+    this.clockSamples += input.length;
+    if (micOn) this.micSamples += input.length;
+    this.cbTime = this.ctx.currentTime;
+  }
+
+  /** 錄音時鐘（秒）：只在遊玩中前進，暫停與倒數不算 */
+  clockNow() {
+    return this.clockSamples / this.sr + Math.max(0, this.ctx.currentTime - this.cbTime);
+  }
+
+  beginRun() {
+    this.ensureCtx();
+    if (this.ring) this.ring.fill(0);
+    this.ringPos = 0;
+    this.clockSamples = 0;
+    this.micSamples = 0;
+    this.events = [];
+    this.cbTime = this.ctx ? this.ctx.currentTime : 0;
+  }
+
+  setCapturing(on) {
+    if (on && this.ctx) this.cbTime = this.ctx.currentTime;
+    this.capturing = Boolean(on) && Boolean(this.ctx);
+  }
+
+  /** 取出最近 10 秒的快照：{ sr, duration, mic: Float32Array | null, events } */
+  freeze() {
+    this.capturing = false;
+    if (!this.ring) return null;
+    const len = this.ring.length;
+    const total = Math.min(len, this.clockSamples);
+    const duration = total / this.sr;
+    const mic = new Float32Array(total);
+    const start = (this.ringPos - total + len) % len;
+    for (let i = 0; i < total; i++) mic[i] = this.ring[(start + i) % len];
+    const windowStart = this.clockSamples / this.sr - duration;
+    const events = this.events
+      .filter((ev) => ev.t >= windowStart)
+      .map((ev) => ({ kind: ev.kind, buffer: ev.buffer, rate: ev.rate, voice: ev.voice, t: ev.t - windowStart }));
+    return { sr: this.sr, duration, mic: this.micSamples > 0 ? mic : null, events };
+  }
+
+  /** Track B：把這 10 秒內觸發過的音效依時間離線重新渲染成一條聲軌 */
+  async renderSfxTrack(snap) {
+    const length = Math.max(1, Math.ceil(snap.duration * snap.sr));
+    if (!OfflineCtor) return new Float32Array(length);
+    const offline = new OfflineCtor(1, length, snap.sr);
+    const bus = offline.createGain();
+    bus.gain.value = 0.9;
+    bus.connect(limiter(offline, offline.destination));
+    const state = { voices: [] };
+    for (const ev of snap.events) startSound(offline, bus, ev.t, ev, state);
+    const rendered = await offline.startRendering();
+    return rendered.getChannelData(0).slice();
+  }
+
+  // ───────── 重播與匯出 ─────────
+
+  playSamples(samples, sr, rate, onEnded) {
+    this.stopReplay();
+    const ctx = this.ensureCtx();
+    const buffer = ctx.createBuffer(1, samples.length, sr);
+    buffer.copyToChannel(samples, 0);
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.playbackRate.value = rate;
+    src.connect(ctx.destination);
+    src.onended = () => {
+      if (this.replaySource === src) this.replaySource = null;
+      if (onEnded) onEnded();
+    };
+    src.start();
+    this.replaySource = src;
+  }
+
+  setReplayRate(rate) {
+    if (this.replaySource) this.replaySource.playbackRate.value = rate;
+  }
+
+  stopReplay() {
+    const src = this.replaySource;
+    this.replaySource = null;
+    if (src) {
+      src.onended = null;
+      try {
+        src.stop();
+      } catch {
+        /* 已經結束 */
+      }
+    }
+  }
+
+  /** 壓縮匯出（webm 或 mp4）：把聲軌即時播進 MediaRecorder，所以要花一個聲軌長度的時間 */
+  async encodeCompressed(samples, sr) {
+    const mime = pickRecorderMime();
+    if (!mime) throw new Error('no-recorder');
+    const ctx = this.ensureCtx();
+    const dest = ctx.createMediaStreamDestination();
+    const rec = new MediaRecorder(dest.stream, { mimeType: mime });
+    const chunks = [];
+    rec.ondataavailable = (e) => {
+      if (e.data && e.data.size) chunks.push(e.data);
+    };
+    const stopped = new Promise((resolve) => (rec.onstop = resolve));
+    const buffer = ctx.createBuffer(1, samples.length, sr);
+    buffer.copyToChannel(samples, 0);
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(dest);
+    rec.start();
+    src.start();
+    await new Promise((resolve) => (src.onended = resolve));
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    rec.stop();
+    await stopped;
+    const type = mime.split(';')[0];
+    return { blob: new Blob(chunks, { type }), ext: type.includes('mp4') ? 'mp4' : 'webm' };
+  }
+}
+
+// ── replay.js ──
+/** 沒有 claude.ai 的下載能力（獨立網頁）時回傳 null */
+async function downloadsCapability() {
+  try {
+    if (window.claude && typeof window.claude.use === 'function') return await window.claude.use('downloads');
+  } catch {
+    /* 沒有這個能力 */
+  }
+  return null;
+}
+
+function saveWithAnchor(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 15000);
+}
+
+const MODE_LABEL = { A: '玩家聲音', B: '遊戲音效', AB: '雙軌混音' };
+
+/**
+ * 結算畫面的「死前 10 秒精彩重播」
+ * Track A = 玩家麥克風原音，Track B = 遊戲音效軌，A+B = 混音（預設）。
+ * 速度用 playbackRate 直接改，不需要重新轉檔。
+ */
+class ReplayController {
+  constructor({ audio, ui }) {
+    this.audio = audio;
+    this.ui = ui;
+    this.snap = null;
+    this.tracks = null;
+    this.mode = 'AB';
+    this.speed = 1;
+    this.playing = false;
+    this.token = 0;
+    this.label = '';
+    ui.bindReplay({
+      onMode: (mode) => this.setMode(mode),
+      onSpeed: (speed) => this.setSpeed(speed),
+      onPlay: () => this.toggle(),
+      onDownload: () => this.download(),
+    });
+  }
+
+  reset() {
+    this.token += 1;
+    this.audio.stopReplay();
+    this.playing = false;
+    this.snap = null;
+    this.tracks = null;
+    this.ui.hideReplay();
+  }
+
+  async prepare(snap, label) {
+    this.reset();
+    if (!snap || snap.duration < 0.5) return;
+    const token = this.token;
+    this.snap = snap;
+    this.label = label;
+    this.ui.showReplay({ hasMic: Boolean(snap.mic), seconds: snap.duration });
+    this.ui.setReplayBusy('準備重播中…');
+    const sfx = await this.audio.renderSfxTrack(snap);
+    if (token !== this.token) return;
+    this.tracks = { A: snap.mic, B: sfx, AB: mixTracks(snap.mic, sfx, 1, 0.7) };
+    this.mode = snap.mic ? 'AB' : 'B';
+    this.speed = 1;
+    this.ui.setReplayBusy('');
+    this.ui.setReplayState({ mode: this.mode, speed: this.speed, playing: false });
+  }
+
+  setMode(mode) {
+    if (!this.tracks || !this.tracks[mode]) return;
+    this.mode = mode;
+    const wasPlaying = this.playing;
+    this.audio.stopReplay();
+    this.playing = false;
+    this.ui.setReplayState({ mode, speed: this.speed, playing: false });
+    if (wasPlaying) this.toggle();
+  }
+
+  setSpeed(speed) {
+    this.speed = speed;
+    this.audio.setReplayRate(speed);
+    this.ui.setReplayState({ mode: this.mode, speed, playing: this.playing });
+  }
+
+  toggle() {
+    if (!this.tracks) return;
+    if (this.playing) {
+      this.audio.stopReplay();
+      this.playing = false;
+    } else {
+      this.audio.unlock();
+      this.audio.playSamples(this.tracks[this.mode], this.snap.sr, this.speed, () => {
+        this.playing = false;
+        this.ui.setReplayState({ mode: this.mode, speed: this.speed, playing: false });
+      });
+      this.playing = true;
+    }
+    this.ui.setReplayState({ mode: this.mode, speed: this.speed, playing: this.playing });
+  }
+
+  /**
+   * 匯出目前選的聲軌（原速）。獨立網頁存成 .wav；
+   * 在 claude.ai 的頁面裡下載能力不收 .wav，所以改轉成 .webm（Safari 為 .mp4）。
+   */
+  async download() {
+    if (!this.tracks) return;
+    const samples = this.tracks[this.mode];
+    const base = `小朋友下樓梯-${this.label}-${MODE_LABEL[this.mode]}`;
+    this.ui.setReplayBusy('匯出中…');
+    try {
+      const dl = await downloadsCapability();
+      if (dl) {
+        const { blob, ext } = await this.audio.encodeCompressed(samples, this.snap.sr);
+        await dl.save({ filename: `${base}.${ext}`, data: blob });
+        this.ui.toast('已匯出重播');
+      } else {
+        saveWithAnchor(encodeWav(samples, this.snap.sr), `${base}.wav`);
+        this.ui.toast('已下載重播（.wav）');
+      }
+    } catch (err) {
+      if (!(err && err.code === 'declined')) this.ui.toast('匯出失敗，這個環境可能不允許下載');
+    } finally {
+      this.ui.setReplayBusy('');
+    }
+  }
+}
+
+// ── stages.js ──
+/**
+ * 五階段關卡：依「層數」決定平台的生成權重。
+ *   normal：[階段起點, 階段終點] 的一般平台比例，在階段內線性過渡（例如 70% → 60%）
+ *   kinds ：特殊平台之間的相對權重（會自動正規化）
+ * 特殊平台比例 = 1 - 一般平台比例；尖刺平台算在特殊平台裡。
+ * 最後一個階段沒有終點，過渡範圍取 B300~B400。
+ */
+const STAGES = Object.freeze([
+  {
+    id: 1, name: '入門井道', from: 1, to: 30, normal: [0.85, 0.85],
+    kinds: { [Kind.SPIKES]: 1 },
+  },
+  {
+    id: 2, name: '機關登場', from: 31, to: 80, normal: [0.7, 0.6],
+    kinds: { [Kind.FLIP]: 1, [Kind.SPRING]: 1, [Kind.CONVEYOR]: 1, [Kind.SPIKES]: 1.5 },
+  },
+  {
+    id: 3, name: '濕滑地帶', from: 81, to: 150, normal: [0.5, 0.4],
+    // 暫停翻轉與滾輪；保留彈簧；新增滑冰、泥沼、橫移
+    kinds: { [Kind.SPRING]: 1, [Kind.ICE]: 1, [Kind.SLIME]: 1, [Kind.MOVING]: 1, [Kind.SPIKES]: 1.5 },
+  },
+  {
+    id: 4, name: '極限深淵', from: 151, to: 299, normal: [0.4, 0.3],
+    kinds: {
+      [Kind.FLIP]: 1, [Kind.SPRING]: 1, [Kind.CONVEYOR]: 1, [Kind.ICE]: 1,
+      [Kind.SLIME]: 1, [Kind.MOVING]: 1, [Kind.SPIKES]: 1.5,
+    },
+  },
+  {
+    id: 5, name: '傳送門領域', from: 300, to: 400, normal: [0.3, 0.2], open: true,
+    kinds: {
+      [Kind.FLIP]: 1, [Kind.SPRING]: 1, [Kind.CONVEYOR]: 1, [Kind.ICE]: 1,
+      [Kind.SLIME]: 1, [Kind.MOVING]: 1, [Kind.PORTAL]: 1, [Kind.SPIKES]: 1.5,
+    },
+    spikeMovingChance: 0.5, // 尖刺平台有一半會左右巡邏
+    // B500 以上的終極平台（FX.ENDGAME_FLOOR），加進第五階段的生成清單
+    endgame: { [Kind.LASER]: 1.2, [Kind.PHANTOM]: 1.2 },
+  },
+]);
+
+/** 階段管理器：回傳目前層數該用的生成權重，並負責抽出下一個平台的種類 */
+class StageManager {
+  constructor(rng = Math.random) {
+    this.rng = rng;
+  }
+
+  stageOf(floor) {
+    for (const s of STAGES) if (!s.open && floor <= s.to) return s;
+    return STAGES[STAGES.length - 1];
+  }
+
+  /** 該層的特殊平台權重：階段本身的清單，B500 以上再加上終極平台 */
+  kindsAt(floor) {
+    const s = this.stageOf(floor);
+    return s.endgame && floor >= FX.ENDGAME_FLOOR ? { ...s.kinds, ...s.endgame } : s.kinds;
+  }
+
+  /** 該層一般平台的機率（階段內線性過渡） */
+  normalChance(floor) {
+    const s = this.stageOf(floor);
+    const t = Math.min(1, Math.max(0, (floor - s.from) / Math.max(1, s.to - s.from)));
+    return lerp(s.normal[0], s.normal[1], t);
+  }
+
+  /** 該層所有種類的實際機率（含一般平台），加總為 1；給測試與報表用 */
+  distribution(floor) {
+    const s = this.stageOf(floor);
+    const pn = this.normalChance(floor);
+    const kinds = this.kindsAt(floor);
+    const total = Object.values(kinds).reduce((a, b) => a + b, 0);
+    const out = { [Kind.NORMAL]: pn };
+    for (const [kind, w] of Object.entries(kinds)) out[kind] = (1 - pn) * (w / total);
+    return out;
+  }
+
+  /**
+   * 抽出下一個平台的種類。allowed(kind) 是防死局規則（例如滑冰不能緊接在翻轉之後），
+   * 被擋掉的種類直接排除、其餘權重重新分配；全被擋掉就回一般平台。
+   */
+  pick(floor, allowed = () => true) {
+    const s = this.stageOf(floor);
+    if (this.rng() < this.normalChance(floor)) return Kind.NORMAL;
+    const entries = Object.entries(this.kindsAt(floor)).filter(([kind]) => allowed(kind));
+    const total = entries.reduce((a, [, w]) => a + w, 0);
+    if (!total) return Kind.NORMAL;
+    let r = this.rng() * total;
+    for (const [kind, w] of entries) {
+      r -= w;
+      if (r <= 0) return this.variant(s, kind);
+    }
+    return this.variant(s, entries[entries.length - 1][0]);
+  }
+
+  /** 第五階段：尖刺平台有機率變成會橫移的動態尖刺 */
+  variant(stage, kind) {
+    if (kind === Kind.SPIKES && stage.spikeMovingChance && this.rng() < stage.spikeMovingChance) return Kind.SPIKE_MOVING;
+    return kind;
+  }
+}
+
+// ── platform-types.js ──
+let platformUid = 0;
+
+/**
+ * 平台基底類別。所有平台都是「單向平台」：只有從上方落下才會踩到。
+ * 子類別只需要覆寫自己有興趣的鉤子：
+ *   update(dt)        每個物理子步呼叫（計時、移動）
+ *   carry(dt)         角色站在上面時，每步被帶著走的水平位移（滾輪、橫移）
+ *   accelScale / speedScale   站在上面時，水平加速度與速度的倍率（滑冰、泥沼）
+ *   onLand(pl, ctx)   角色踩上時（彈簧、碎石、傳送門）；ctx 見 world.js 的 landContext
+ *   hits(pl)          這個平台本身有沒有打到角色（雷射光束）；打到就扣血
+ *   coasts            站在上面時放開按鍵不減速（滑冰）
+ */
+class Platform {
+  constructor(index, x, y, kind = Kind.NORMAL, warn = false) {
+    this.id = ++platformUid;
+    this.index = index; // 第幾階，也就是樓層數
+    this.x = x;
+    this.y = y;
+    this.w = CONFIG.PLATFORM_W;
+    this.h = CONFIG.PLATFORM_H;
+    this.kind = kind;
+    this.warn = warn;   // 50 層後危險連段之後的安全平台（只是標記，不再畫光暈，也沒有任何遊戲效果）
+    this.solid = true;  // false = 已經消失，不能踩
+    this.dead = false;  // true = 動畫也結束，可以從清單移除
+    this.age = 0;
+  }
+
+  get cx() {
+    return this.x + this.w / 2;
+  }
+
+  get isSpikes() {
+    return false;
+  }
+
+  get isMoving() {
+    return false;
+  }
+
+  /** 這個平台在整個生命週期可能占據的水平範圍（橫移平台是整段巡邏範圍） */
+  get footprint() {
+    return { x: this.x, w: this.w };
+  }
+
+  get coasts() {
+    return false;
+  }
+
+  /** 站在上面時的固定滑行速度（只有滑冰有）；0 = 照一般方式依按鍵力道加速 */
+  get slideSpeed() {
+    return 0;
+  }
+
+  get accelScale() {
+    return 1;
+  }
+
+  get speedScale() {
+    return 1;
+  }
+
+  update(dt) {
+    this.age += dt;
+  }
+
+  carry() {
+    return 0;
+  }
+
+  onLand() {}
+
+  hits() {
+    return false;
+  }
+
+  clone() {
+    return Object.assign(Object.create(Object.getPrototypeOf(this)), this);
+  }
+}
+
+class NormalPlatform extends Platform {
+  constructor(index, x, y, opts = {}) {
+    super(index, x, y, Kind.NORMAL, Boolean(opts.warn));
+  }
+}
+
+class SpikePlatform extends Platform {
+  constructor(index, x, y) {
+    super(index, x, y, Kind.SPIKES);
+  }
+
+  get isSpikes() {
+    return true;
+  }
+}
+
+/** 滾輪：站在上面會被往 dir 方向推 */
+class Conveyor extends Platform {
+  constructor(index, x, y, opts = {}) {
+    super(index, x, y, Kind.CONVEYOR);
+    this.dir = opts.dir || 1;
+  }
+
+  carry(dt) {
+    return this.dir * FX.CONVEYOR_PUSH * dt;
+  }
+}
+
+/**
+ * 彈簧：踩到給一個向上的衝力。衝力的高度被「到天花板的距離」限制，所以彈簧不會把角色直接彈進刺針。
+ * 只彈一次（charges），之後當一般平台，避免卡在連續彈跳裡。
+ */
+class Spring extends Platform {
+  constructor(index, x, y) {
+    super(index, x, y, Kind.SPRING);
+    this.charges = 1;
+    this.squash = 0; // 動畫用：剛彈起來的瞬間為 1
+  }
+
+  /** 從平台頂面往上最多能彈多高；離天花板太近就回傳 0 */
+  launchHeight(pl) {
+    const room = pl.y - (CONFIG.CEILING_Y + 6);
+    const h = Math.min(FX.SPRING_HEIGHT, room);
+    return h >= FX.SPRING_MIN_HEIGHT ? h : 0;
+  }
+
+  update(dt) {
+    super.update(dt);
+    this.squash = Math.max(0, this.squash - dt * 4);
+  }
+
+  onLand(pl, ctx) {
+    if (this.charges <= 0) return;
+    const h = this.launchHeight(pl);
+    if (!h) return;
+    this.charges -= 1;
+    this.squash = 1;
+    pl.ground = null;
+    pl.vy = -Math.sqrt(2 * CONFIG.GRAVITY * h);
+    if (ctx.emit) ctx.emit('spring', this);
+  }
+}
+
+/**
+ * 碎石（原翻轉平台）：踩上去後整塊碎片劇烈震動，FLIP_DELAY 秒後瞬間碎裂，
+ * 碎片往下掉 FLIP_FADE 秒。沒有進度條，只能靠震動判斷還剩多久（震幅隨時間變大）。
+ */
+class Cracked extends Platform {
+  constructor(index, x, y) {
+    super(index, x, y, Kind.FLIP);
+    this.state = 'idle'; // idle → armed → gone
+    this.timer = 0;
+    this.fade = 0;
+  }
+
+  /** 0 = 還沒踩；0~1 = 震動進度 */
+  get progress() {
+    return this.state === 'armed' ? 1 - Math.max(0, this.timer) / FX.FLIP_DELAY : 0;
+  }
+
+  get remaining() {
+    return this.state === 'armed' ? Math.max(0, this.timer) : FX.FLIP_DELAY;
+  }
+
+  update(dt) {
+    super.update(dt);
+    if (this.state === 'armed') {
+      this.timer -= dt;
+      if (this.timer <= 0) {
+        this.state = 'gone';
+        this.solid = false;
+        this.fade = FX.FLIP_FADE;
+      }
+    } else if (this.state === 'gone') {
+      this.fade -= dt;
+      if (this.fade <= 0) this.dead = true;
+    }
+  }
+
+  onLand(pl, ctx) {
+    if (this.state !== 'idle') return;
+    this.state = 'armed';
+    this.timer = FX.FLIP_DELAY;
+    if (ctx.emit) ctx.emit('flip', this);
+  }
+}
+
+/**
+ * 滑冰：在上面按一下方向，就以固定的中等速度 ICE_SLIDE_SPEED 滑出去（按多大力都一樣），
+ * 放開按鍵也不會停，一直滑到踩上非冰面或撞牆；按反方向會以同樣速度反向滑（加速度 ICE_ACCEL_SCALE）。
+ */
+class Ice extends Platform {
+  constructor(index, x, y) {
+    super(index, x, y, Kind.ICE);
+  }
+
+  get coasts() {
+    return true;
+  }
+
+  get slideSpeed() {
+    return FX.ICE_SLIDE_SPEED;
+  }
+
+  get accelScale() {
+    return FX.ICE_ACCEL_SCALE;
+  }
+}
+
+/** 泥沼（紫色）：站在上面時水平速度剩 SLIME_SPEED_SCALE（約 38%） */
+class Slime extends Platform {
+  constructor(index, x, y) {
+    super(index, x, y, Kind.SLIME);
+  }
+
+  /** >= 300F：減速效果減少 25%（倍率 0.5385） */
+  get speedScale() {
+    return this.index >= FX.SLIME_LATE_FLOOR ? FX.SLIME_LATE_SCALE : FX.SLIME_SPEED_SCALE;
+  }
+}
+
+/** 橫移：以 x0 為中心左右巡邏，站在上面的角色會被帶著走 */
+class Moving extends Platform {
+  constructor(index, x, y, opts = {}, kind = Kind.MOVING) {
+    super(index, x, y, kind);
+    this.x0 = x;
+    this.amp = FX.MOVING_AMP;
+    this.omega = FX.MOVING_OMEGA;
+    this.phase = opts.phase ?? 0;
+    this.dx = 0;
+    this.x = this.x0 + this.amp * Math.sin(this.phase);
+  }
+
+  get isMoving() {
+    return true;
+  }
+
+  get footprint() {
+    return { x: this.x0 - this.amp, w: this.w + this.amp * 2 };
+  }
+
+  update(dt) {
+    this.age += dt;
+    const nx = this.x0 + this.amp * Math.sin(this.phase + this.omega * this.age);
+    this.dx = nx - this.x;
+    this.x = nx;
+  }
+
+  carry() {
+    return this.dx;
+  }
+}
+
+/** 動態尖刺：會橫移的尖刺平台（第五階段） */
+class SpikeMoving extends Moving {
+  constructor(index, x, y, opts = {}) {
+    super(index, x, y, opts, Kind.SPIKE_MOVING);
+  }
+
+  get isSpikes() {
+    return true;
+  }
+}
+
+/**
+ * 傳送門：踩上去的瞬間，傳送門立刻消失、角色被吸走（暫停並隱藏），同時目的地馬上出現 PORTAL_DELAY（0.3）秒的
+ * 傳送動畫，結束後角色出現在「目標安全平台正上方 PORTAL_DROP_HEIGHT（200px）的高空」，然後自由落下。
+ *
+ * 名詞：天花板尖刺 = 畫面頂端固定的刺牆（邊界，不是平台）；尖刺平台 = isSpikes 的平台；
+ *       安全平台 = 其餘可以站的平台（普通、移動、滑冰、史萊姆、滾輪、彈簧、雷射…），不含碎石、幻影、傳送門。
+ * 目標：PORTAL_UP_CHANCE（70%）往上、其餘往下；往上只找上方 PORTAL_UP_RANGE（6）層之內的平台，
+ *       找不到合法的安全平台就改往下找（反過來往下找不到也會試往上）。
+ * 候選平台必須：是安全平台、離天花板尖刺至少 PORTAL_CEILING_SAFE（250px）的落下空間、離畫面下緣 PORTAL_BOTTOM_MARGIN 以上、
+ *       而且從高空落下的路徑上沒有尖刺平台（免得一落地就被刺）。
+ * 目的地平台是物件參照（所有平台一起往上捲），所以 0.3 秒後仍在同一個位置。
+ */
+class Portal extends Platform {
+  constructor(index, x, y) {
+    super(index, x, y, Kind.PORTAL);
+    this.flash = 0;
+    this.pending = null; // { dest, t }
+  }
+
+  update(dt) {
+    super.update(dt);
+    this.flash = Math.max(0, this.flash - dt);
+  }
+
+  /** 安全平台：不是尖刺平台、碎石、幻影、傳送門 */
+  static canLandOn(p) {
+    return p.solid && !p.dead && !p.isSpikes && p.kind !== Kind.PORTAL && p.kind !== Kind.FLIP && p.kind !== Kind.PHANTOM;
+  }
+
+  /**
+   * 傳過去的空中落點：目標平台中心 X、平台表面上方 PORTAL_DROP_HEIGHT 處（角色腳底）；不會高過天花板尖刺。
+   * 安全空間保護：落點「離天花板尖刺 < PORTAL_NEAR_CEILING（100px）」而且「正下方最近的安全平台 < PORTAL_NEAR_FLOOR（150px）」
+   * 兩個條件同時成立時，把落點往正下方移 PORTAL_NEAR_FLOOR（150px）；如果移位後正下方 150px 內還有別的平台，
+   * 就在左右找最近的「下方 150px 無平台」的 X。整個計算是純函式（不碰角色），結果一次算好（見 finalize）。
+   * 回傳 { x, y, shifted, blocked }；blocked = 找不到任何能順利垂直掉落的位置。
+   */
+  static spawnPoint(dest, platforms = []) {
+    const w = CONFIG.PLAYER_W;
+    const h = CONFIG.PLAYER_H;
+    let x = clamp(dest.cx - w / 2, 0, CONFIG.WORLD_W - w);
+    let y = Math.max(dest.y - FX.PORTAL_DROP_HEIGHT - h, CONFIG.CEILING_Y + 12);
+    const column = (p) => !p.dead && x + w > p.footprint.x - 2 && x < p.footprint.x + p.footprint.w + 2;
+    let shifted = false;
+    let blocked = false;
+    const nearCeiling = y - CONFIG.CEILING_Y < FX.PORTAL_NEAR_CEILING;
+    if (nearCeiling) {
+      let gap = Infinity; // 正下方最近的安全平台離腳底多遠
+      for (const p of platforms) if (Portal.canLandOn(p) && column(p) && p.y >= y + h) gap = Math.min(gap, p.y - (y + h));
+      gap = Math.min(gap, dest.y - (y + h));
+      if (gap < FX.PORTAL_NEAR_FLOOR) {
+        y = Math.min(y + FX.PORTAL_NEAR_FLOOR, dest.y - h - 10); // 往下移 150px，但不穿過目標平台
+        shifted = true;
+        const feet = y + h;
+        const clear = (cx) => !platforms.some((p) => p !== dest && !p.dead && cx + w > p.footprint.x - 2 && cx < p.footprint.x + p.footprint.w + 2 && p.y > feet && p.y < feet + FX.PORTAL_NEAR_FLOOR);
+        blocked = !clear(x);
+        // 正下方被擋住：在左右找最近的「下方 150px 無平台」的位置
+        for (let d = 8; blocked && d <= 160; d += 8) {
+          for (const nx of [x - d, x + d]) {
+            if (nx >= CONFIG.WALL_MARGIN && nx + w <= CONFIG.WORLD_W - CONFIG.WALL_MARGIN && clear(nx)) { x = nx; blocked = false; break; }
+          }
+        }
+      }
+    }
+    return { x, y, shifted, blocked };
+  }
+
+  /**
+   * 目標平台能不能傳。level 0 是完整規格；找不到目標時 plan() 會逐級放寬（保證踩了一定會傳）：
+   *   0：安全平台、離天花板尖刺 >= 250px、離畫面下緣 >= 110px、落下路徑上沒有尖刺平台
+   *   1：不檢查落下路徑上的尖刺平台（移位後下方被擋住仍然不行）
+   *   2：離下緣 >= 40px、離天花板只要夠站得下（高空落點會被壓在天花板下面）
+   *   3：任何畫面內的安全平台（連被擋住也接受，保證發動）
+   */
+  usable(p, platforms, H, rise = 0, level = 0) {
+    if (!Portal.canLandOn(p) || p === this) return false;
+    if (p.y >= H - (level >= 3 ? 20 : level >= 2 ? 40 : FX.PORTAL_BOTTOM_MARGIN)) return false;
+    const ceilGap = p.y - CONFIG.CEILING_Y;
+    if (level < 2 && ceilGap < Math.max(FX.PORTAL_CEILING_SAFE, rise * FX.PORTAL_UP_HEADROOM)) return false;
+    if (level >= 2 && ceilGap < CONFIG.PLAYER_H + 30) return false;
+    const sp = Portal.spawnPoint(p, platforms);
+    if (level >= 3) return true;
+    if (sp.blocked) return false; // 移位後下方 150px 內還有別的平台擋著
+    if (level >= 1) return true;
+    return !platforms.some(
+      (q) =>
+        q.isSpikes &&
+        !q.dead &&
+        q.y < p.y &&
+        q.y + q.h > sp.y - 12 &&
+        sp.x + CONFIG.PLAYER_W > q.footprint.x - 6 &&
+        sp.x < q.footprint.x + q.footprint.w + 6,
+    );
+  }
+
+  /** { up: [...], down: [...] }：上方 PORTAL_UP_RANGE 層之內 / 下方的合法目標平台 */
+  destinations(platforms, H, rise = 0, level = 0) {
+    const ok = (p) => this.usable(p, platforms, H, rise, level);
+    const range = level >= 3 ? Infinity : FX.PORTAL_UP_RANGE;
+    const up = platforms.filter((p) => p.index < this.index && p.index >= this.index - range && ok(p));
+    const down = platforms.filter((p) => p.index > this.index && ok(p));
+    return { up, down };
+  }
+
+  /** 目的地（空中落點）的畫面座標（動畫用）；沒有安排傳送時回傳 null */
+  targetPoint() {
+    const t = this.pending;
+    if (!t) return null;
+    return { x: t.dest.cx + t.ox, y: t.dest.y + t.oy + CONFIG.PLAYER_H / 2 };
+  }
+
+  /**
+   * 原子化傳送：把「目標平台 + 安全保護後的最終落點」一次算好，存成相對目標平台的偏移（ox, oy）。
+   * 動畫位置與實際傳送位置都用這組偏移，所以不會「先傳到 A、下一幀又瞬移到 B」。
+   */
+  finalize(plan, platforms) {
+    const sp = Portal.spawnPoint(plan.dest, platforms);
+    return { ...plan, ox: sp.x + CONFIG.PLAYER_W / 2 - plan.dest.cx, oy: sp.y - plan.dest.y };
+  }
+
+  /** 抽出目標 { dest, level }；level 0~3 逐級放寬直到找到為止，全部都沒有才回傳 null（畫面內完全沒有安全平台） */
+  plan(ctx) {
+    const goUp = ctx.random() < FX.PORTAL_UP_CHANCE;
+    for (let level = 0; level <= 3; level++) {
+      const { up, down } = this.destinations(ctx.platforms, ctx.H, ctx.rise || 0, level);
+      const list = (goUp ? up : down).length ? (goUp ? up : down) : goUp ? down : up; // 找不到就換另一個方向
+      if (list.length) return { dest: list[Math.floor(ctx.random() * list.length)], level };
+    }
+    return null;
+  }
+
+  onLand(pl, ctx) {
+    if (!ctx.teleport || this.pending) return;
+    const chosen = this.plan(ctx);
+    if (!chosen) return; // 沒有合法的目的地：當一般平台
+    this.pending = { ...this.finalize(chosen, ctx.platforms), t: FX.PORTAL_DELAY };
+    this.solid = false; // 傳送門立刻消失
+    this.flash = FX.PORTAL_DELAY;
+    pl.warp = this;
+    pl.ground = null;
+    pl.vx = 0;
+    pl.vy = 0;
+    pl.slide = false;
+    if (ctx.emit) ctx.emit('portalArm', this);
+  }
+
+  /** 傳送動畫剩幾秒（0 ~ PORTAL_DELAY）；沒有在傳送時是 0 */
+  get warpLeft() {
+    return this.pending ? Math.max(0, this.pending.t) : 0;
+  }
+
+  /** 每個物理子步由 stepWorld 在「傳送中」呼叫：倒數結束就傳送 */
+  tick(dt, pl, ctx) {
+    const t = this.pending;
+    if (!t) return;
+    this.pending = { ...t, t: t.t - dt }; // 不原地修改：模擬器會複製平台，pending 物件不能共用
+    if (this.pending.t > 0) return;
+    const spot = { x: pl.x, y: pl.y };
+    let plan = this.pending;
+    this.pending = null;
+    this.dead = true;
+    pl.warp = null;
+    // 這 0.3 秒內目標變了（例如被捲出畫面、剛好被刺平台擋住）：重抽一個
+    if (!this.usable(plan.dest, ctx.platforms, ctx.H, ctx.rise || 0, 3)) plan = this.plan(ctx);
+    if (plan && plan.ox === undefined) plan = this.finalize(plan, ctx.platforms); // 重抽的目標也先算好最終落點
+    if (plan) ctx.teleport(pl, plan.dest, this, { x: plan.dest.cx + plan.ox - CONFIG.PLAYER_W / 2, y: plan.dest.y + plan.oy });
+    else ctx.teleportAir(pl, spot.x, spot.y, this); // 真的沒地方去：留在原地自由落下
+  }
+}
+
+/**
+ * 雷射（B500+）：平台中央每個週期往下打出一道直線光束，週期 = LASER_OFF + LASER_ON 秒（3 秒關、1 秒開）。
+ * 開啟前 LASER_WARN 秒光束會閃爍預警。平台本身可以安心站，光束打在「下方」。
+ * phase 是週期內的起始位置（秒），讓相鄰的雷射不會同步。
+ */
+class Laser extends Platform {
+  constructor(index, x, y, opts = {}) {
+    super(index, x, y, Kind.LASER);
+    this.cycle = FX.LASER_OFF + FX.LASER_ON;
+    this.offset = opts.phase ?? 0; // 0 ~ cycle 秒
+  }
+
+  /** 週期內目前的時間點 */
+  get t() {
+    return (this.age + this.offset) % this.cycle;
+  }
+
+  get beamOn() {
+    return this.t >= FX.LASER_OFF;
+  }
+
+  get beamWarn() {
+    return !this.beamOn && this.t >= FX.LASER_OFF - FX.LASER_WARN;
+  }
+
+  get beam() {
+    return { x: this.cx - FX.LASER_WIDTH / 2, w: FX.LASER_WIDTH, top: this.y + this.h, bottom: this.y + this.h + FX.LASER_LENGTH };
+  }
+
+  hits(pl) {
+    if (!this.beamOn) return false;
+    const b = this.beam;
+    return pl.x + pl.w > b.x && pl.x < b.x + b.w && pl.y + pl.h > b.top && pl.y < b.bottom;
+  }
+}
+
+/**
+ * 幻影（B500+）：每 PHANTOM_PERIOD 秒在「實體」與「虛無」之間切換一次。虛無時沒有碰撞體，
+ * 站在上面會直接掉下去，從上方落下也會穿過。切換前 PHANTOM_BLINK 秒開始閃爍預警。
+ */
+class Phantom extends Platform {
+  constructor(index, x, y, opts = {}) {
+    super(index, x, y, Kind.PHANTOM);
+    this.period = FX.PHANTOM_PERIOD;
+    this.offset = opts.phase ?? 0; // 0 ~ 2 * period 秒
+    this.solid = this.solidAt(0);
+  }
+
+  /** age 秒時是不是實體（偶數個週期 = 實體） */
+  solidAt(age) {
+    return Math.floor((age + this.offset) / this.period) % 2 === 0;
+  }
+
+  /** 距離下一次切換還有幾秒 */
+  get untilFlip() {
+    const t = (this.age + this.offset) % this.period;
+    return this.period - t;
+  }
+
+  update(dt) {
+    super.update(dt);
+    this.solid = this.solidAt(this.age);
+  }
+}
+
+/** 平台工廠：依種類建立對應的子類別 */
+function createPlatform(kind, index, x, y, opts = {}) {
+  switch (kind) {
+    case Kind.NORMAL: return new NormalPlatform(index, x, y, opts);
+    case Kind.SPIKES: return new SpikePlatform(index, x, y);
+    case Kind.CONVEYOR: return new Conveyor(index, x, y, opts);
+    case Kind.SPRING: return new Spring(index, x, y);
+    case Kind.FLIP: return new Cracked(index, x, y);
+    case Kind.ICE: return new Ice(index, x, y);
+    case Kind.SLIME: return new Slime(index, x, y);
+    case Kind.MOVING: return new Moving(index, x, y, opts);
+    case Kind.SPIKE_MOVING: return new SpikeMoving(index, x, y, opts);
+    case Kind.PORTAL: return new Portal(index, x, y);
+    case Kind.LASER: return new Laser(index, x, y, opts);
+    case Kind.PHANTOM: return new Phantom(index, x, y, opts);
+    default: throw new Error(`unknown platform kind: ${kind}`);
+  }
+}
+
+// ── platforms.js ──
+const EDGE_GRAB = CONFIG.PLAYER_W / 2 - 2; // 角色中心超出平台這麼多就會離開平台（Player.overlapsX 內縮 2px）
+const HIT_PAD = CONFIG.PLAYER_W / 2;       // 角色中心與平台邊緣小於這個距離，穿越平台高度時就會擦到
+const LAND_MARGIN = 10;                    // 目標落點離平台邊緣至少這麼遠，留給剎車滑行
+const REVERSE_LAG = 0.15;                  // 角色折返（速度從 +190 變 -190）要花的時間，秒
+const STOP_DRIFT = 8;                      // 角色放開方向後因慣性多滑的距離
+
+/**
+ * 角色離開平台後，落到下方 dy 處所需的時間（秒）。
+ * 平台以 riseSpeed 上升，所以解 ½·g·t² + rise·t = dy；落下速度上限 MAX_FALL。
+ */
+function fallTime(dy, riseSpeed) {
+  const g = CONFIG.GRAVITY;
+  const vmax = CONFIG.MAX_FALL;
+  const tCap = vmax / g;
+  const distCap = 0.5 * g * tCap * tCap + riseSpeed * tCap;
+  if (dy <= distCap) {
+    return (-riseSpeed + Math.sqrt(riseSpeed * riseSpeed + 2 * g * dy)) / g;
+  }
+  return tCap + (dy - distCap) / (vmax + riseSpeed);
+}
+
+/**
+ * 安全路徑投影（Safe Path Projection）
+ *
+ * 假設角色站在 safe 上，要去 x 位置為 nx、高度為 ny 的新一般平台。
+ * 理想路徑：先走到 safe 的左端或右端離開平台，落下時以全速朝目標點水平移動
+ * （目標點 = 新平台縮進 LAND_MARGIN 後，離開點最近的位置）。
+ * 這條路徑要同時滿足：
+ *   1. 可達：水平移動距離 <= REACH_SAFETY × MOVE_SPEED × 落下時間。
+ *   2. 無傷：角色經過每個危險平台（safe 之後生成的刺針平台）的高度時，
+ *      中心點都不在該平台左右各 HIT_PAD 的範圍內。位置以最慢與最快兩種速度各算一次，整段區間都要避開。
+ * 離開點必須在牆內（平台貼牆那一側不能走下去）。tol 是上升速度的容許誤差比例，路徑在 ±tol 內都要成立。
+ * 回傳 { dir, exit, target }，找不到路徑回傳 null。
+ *   dangers: [{ x, w, y }]
+ */
+function planSafePath(safe, dangers, nx, ny, riseSpeed, tol = CONFIG.RISE_TOLERANCE) {
+  const vLo = CONFIG.MOVE_SPEED * CONFIG.REACH_SAFETY;
+  const vHi = CONFIG.MOVE_SPEED;
+  const rises = [riseSpeed * (1 - tol), riseSpeed, riseSpeed * (1 + tol)];
+  const lo = nx + LAND_MARGIN;
+  const hi = nx + CONFIG.PLATFORM_W - LAND_MARGIN;
+
+  for (const dir of [1, -1]) {
+    const exit = dir > 0 ? safe.x + safe.w + EDGE_GRAB + 1 : safe.x - EDGE_GRAB - 1;
+    // 平台貼牆時，角色走不到牆外，那一側就不能當離開點
+    if (exit < CONFIG.PLAYER_W / 2 || exit > CONFIG.WORLD_W - CONFIG.PLAYER_W / 2) continue;
+    const target = clamp(exit, lo, hi);
+    const dist = Math.abs(target - exit);
+    const sign = Math.sign(target - exit);
+    const reverse = sign !== 0 && sign !== dir;
+    let ok = true;
+
+    for (const rise of rises) {
+      const tAll = fallTime(ny - safe.y, rise) - (reverse ? REVERSE_LAG : 0);
+      if (dist > vLo * tAll) {
+        ok = false;
+        break;
+      }
+      for (const d of dangers) {
+        const t = fallTime(d.y - safe.y, rise);
+        // 角色在 t 秒時可能的位置範圍；折返時最慢可能還停在離開點
+        let a = exit + sign * Math.min(vLo * Math.max(0, t - (reverse ? REVERSE_LAG : 0)), dist);
+        let b = exit + sign * Math.min(vHi * t, dist);
+        if (sign === 0) b = exit + dir * STOP_DRIFT;
+        else if (reverse) a = exit;
+        const from = Math.min(a, b);
+        const to = Math.max(a, b);
+        if (to > d.x - HIT_PAD && from < d.x + d.w + HIT_PAD) {
+          ok = false;
+          break;
+        }
+      }
+      if (!ok) break;
+    }
+    if (ok) return { dir, exit, target };
+  }
+  return null;
+}
+
+/**
+ * 平台生成器（含防必死與階段系統）
+ *
+ * 追蹤兩個狀態（都存「平台本身的參照」，所以座標永遠是目前畫面上的即時座標）：
+ *   lastSafe  最近一個「不是尖刺」的平台，也就是角色下一步會從這裡出發
+ *   dangers   lastSafe 之後生成的所有尖刺平台（危險投影區；橫移尖刺取整段巡邏範圍）
+ *
+ * 種類由 StageManager 依層數抽，再依序過三關：
+ *   1. 防死局規則 allowed()：滑冰不能緊接在翻轉之後、彈簧正上方不能有尖刺、連續尖刺上限。
+ *   2. 位置驗證：與上一階拉開距離、正上方通道不碰危險投影區、planSafePath 找得到可達且無傷的路徑
+ *      （橫移平台會把「巡邏範圍內的每一個相位」都驗證一遍）。
+ *   3. 尖刺平台另外做前瞻：放下去之後，下一階一定還有合法位置。
+ * 抽到的種類找不到合法位置時，退回一般平台；一般平台也找不到，才用 fallback。
+ *
+ * 其他種類的處理方式：
+ *   滾輪 / 滑冰 / 泥沼 / 翻轉 / 彈簧：只影響「站在上面」的行為，不改變離開平台後的空中路徑，
+ *     所以和一般平台用同一套路徑驗證（彈簧用天花板距離限制彈跳高度）。
+ *   傳送門：落點是下方 2~5 層內任一個非尖刺平台（踩到才抽），每個非尖刺平台本來就有驗證過的下一步，所以天生可達。
+ *   雷射 / 幻影：和一般平台用同一套驗證；雷射光束有開有關、幻影有實體有虛無，路徑驗證不考慮它們，
+ *     改由 allowed() 的規則（幻影比照碎石、雷射不放在彈簧上方）與 autoTest.js 的模擬把關。
+ */
+class PlatformGenerator {
+  constructor(worldW, { rng = Math.random } = {}) {
+    this.worldW = worldW;
+    this.rng = rng;
+    this.stages = new StageManager(rng);
+    this.fallbackCount = 0;
+    this.reset();
+  }
+
+  reset() {
+    this.index = 0;
+    this.spikeStreak = 0;
+    this.last = null;
+    this.lastSafe = null;
+    this.dangers = [];
+    this.recent = [];        // 最近幾個平台，防死局規則要看
+    this.active = [];
+  }
+
+  get minX() {
+    return CONFIG.WALL_MARGIN;
+  }
+
+  get maxX() {
+    return this.worldW - CONFIG.PLATFORM_W - CONFIG.WALL_MARGIN;
+  }
+
+  createFirst(y) {
+    const p = new NormalPlatform(0, (this.worldW - CONFIG.PLATFORM_W) / 2, y);
+    this.last = p;
+    this.lastSafe = p;
+    this.dangers = [];
+    this.recent = [p];
+    return p;
+  }
+
+  /** riseSpeed：數字，或「樓層 → 該層上升速度」的函式（平台是提前生成的，要用它被踩到時的速度規劃） */
+  next(y, riseSpeed, active = []) {
+    this.active = active; // 目前所有存在的平台（含已預先生成、還在畫面下方的），雷射數量上限要看
+    const riseOf = typeof riseSpeed === 'function' ? riseSpeed : () => riseSpeed;
+    const index = ++this.index;
+
+    const forced = this.spikeStreak >= CONFIG.MAX_SPIKE_STREAK;
+    let kind = index <= CONFIG.SAFE_START ? Kind.NORMAL : this.stages.pick(index, (k) => this.allowed(k, forced, y));
+    let spot = kind === Kind.NORMAL ? null : this.pick(kind, index, y, riseOf);
+    if (!spot) {
+      kind = Kind.NORMAL;
+      spot = this.pick(kind, index, y, riseOf);
+    }
+    if (!spot) spot = { x: this.fallback(index, y, riseOf) };
+    // 傳送門與橫移尖刺在 pick 時就決定好了真正的種類
+    if (spot.kind) kind = spot.kind;
+
+    const warn = forced && index > CONFIG.WARN_FLOOR && kind === Kind.NORMAL;
+    const platform = createPlatform(kind, index, spot.x, y, { warn, dir: spot.dir, phase: spot.phase });
+    this.commit(platform);
+    return platform;
+  }
+
+  commit(platform) {
+    this.last = platform;
+    this.recent.push(platform);
+    if (this.recent.length > 8) this.recent.shift();
+    if (platform.isSpikes) {
+      this.spikeStreak += 1;
+      this.dangers.push(platform);
+    } else {
+      this.spikeStreak = 0;
+      this.lastSafe = platform;
+      this.dangers = [];
+    }
+  }
+
+  // ───────── 防死局規則 ─────────
+
+  allowed(kind, forced, y) {
+    const droppedRecently = (n) => this.recent.slice(-n).some((p) => isDropper(p.kind));
+    if (kind === Kind.SPIKES || kind === Kind.SPIKE_MOVING) {
+      // 碎石 / 幻影把人丟下去：緊接在後面的一層不能是尖刺，否則人被迫落到畫面外才有安全平台
+      if (droppedRecently(FX.FLIP_SPIKE_GAP)) return false;
+      return !forced;
+    }
+    if (isDropper(kind)) {
+      // 碎石 / 幻影連著出現，人會一路被丟到畫面下緣，沒有時間等平台升上來
+      return !droppedRecently(FX.FLIP_FLIP_GAP);
+    }
+    if (kind === Kind.ICE || kind === Kind.SLIME) {
+      // 碎石消失後會直接掉到下面，下面如果是滑冰，角色帶著落下的速度停不住
+      return !droppedRecently(FX.FLIP_ICE_GAP);
+    }
+    if (kind === Kind.LASER) {
+      // 同時存在的雷射平台最多 LASER_MAX 個，超過就改生成別的平台
+      return this.active.filter((p) => p.kind === Kind.LASER && !p.dead).length < FX.LASER_MAX;
+    }
+    if (kind === Kind.SPRING) {
+      // 彈起來之後會落回正上方的平台：SPRING_GUARD_RATIO 倍彈跳高度之內不能有尖刺或雷射
+      const reach = FX.SPRING_GUARD_RATIO * FX.SPRING_HEIGHT;
+      return !this.recent.some((p) => (p.isSpikes || p.kind === Kind.LASER) && y - p.y < reach);
+    }
+    return true;
+  }
+
+  // ───────── 找位置 ─────────
+
+  halfSweep(kind) {
+    return kind === Kind.MOVING || kind === Kind.SPIKE_MOVING ? FX.MOVING_AMP : 0;
+  }
+
+  /** 回傳 { x, kind?, dir?, phase? } 或 null。尖刺種類另外做前瞻 */
+  pick(kind, index, y, riseOf) {
+    const spiky = kind === Kind.SPIKES || kind === Kind.SPIKE_MOVING;
+    const extras = this.extras(kind);
+    for (const step of [2, 0.5]) {
+      const valid = this.candidates(kind, index, y, riseOf, step);
+      while (valid.length) {
+        const [x] = valid.splice(Math.floor(this.rng() * valid.length), 1);
+        if (!spiky || this.leavesRoom(kind, x, index, y, riseOf)) return { x, kind, ...extras };
+      }
+    }
+    return null;
+  }
+
+  extras(kind) {
+    if (kind === Kind.CONVEYOR) return { dir: this.rng() < 0.5 ? -1 : 1 };
+    if (kind === Kind.MOVING || kind === Kind.SPIKE_MOVING) return { phase: this.rng() * Math.PI * 2 };
+    // 雷射的週期 4 秒、幻影的完整週期 2 秒：隨機起始時間，相鄰的不會同步
+    if (kind === Kind.LASER) return { phase: this.rng() * (FX.LASER_OFF + FX.LASER_ON) };
+    if (kind === Kind.PHANTOM) return { phase: this.rng() * FX.PHANTOM_PERIOD * 2 };
+    return {};
+  }
+
+  candidates(kind, index, y, riseOf, step) {
+    const amp = this.halfSweep(kind);
+    const lo = this.minX + amp;
+    const hi = this.maxX - amp;
+    const out = [];
+    for (let x = lo; x <= hi; x += step) {
+      const cand = Math.min(hi, x + this.rng() * step);
+      if (this.isValid(cand, kind, index, y, riseOf)) out.push(cand);
+    }
+    return out;
+  }
+
+  /** x 是平台的位置；橫移平台則是巡邏中心（平台左緣 = x ± MOVING_AMP） */
+  isValid(x, kind, index, y, riseOf) {
+    const last = this.last;
+    const W = CONFIG.PLATFORM_W;
+    const amp = this.halfSweep(kind);
+    const mine = { x: x - amp, w: W + amp * 2 };
+    const lastFp = last.footprint;
+    const dist = Math.abs(x + W / 2 - (last.isMoving ? last.x0 + W / 2 : last.cx));
+    if (dist < W * CONFIG.MIN_OFFSET_RATIO) return false;
+
+    if (kind === Kind.SPIKES || kind === Kind.SPIKE_MOVING) {
+      if (!last.isSpikes) return dist >= W * CONFIG.SPIKE_AFTER_NORMAL_RATIO;
+      // 兩個尖刺之間水平方向要留出通道（橫移的取整段巡邏範圍）
+      const clearance = Math.max(mine.x, lastFp.x) - Math.min(mine.x + mine.w, lastFp.x + lastFp.w);
+      return clearance >= CONFIG.PLAYER_W * CONFIG.SPIKE_CHANNEL;
+    }
+
+    const pad = CONFIG.SHADOW_MARGIN;
+    for (const d of this.dangers) {
+      const f = d.footprint;
+      if (mine.x - pad < f.x + f.w && mine.x + mine.w + pad > f.x) return false;
+    }
+    return this.hopReachable(x, kind, index, y, riseOf);
+  }
+
+  /** lastSafe → 新平台，有沒有可達且不碰任何尖刺的路徑。兩端是橫移平台時，每個相位的組合都要成立 */
+  hopReachable(x, kind, index, y, riseOf) {
+    const from = this.lastSafe;
+    const rFrom = riseOf(from.index);
+    const rTo = riseOf(index);
+    const rise = (rFrom + rTo) / 2;
+    const tol = CONFIG.RISE_TOLERANCE + Math.abs(rTo - rFrom) / (2 * rise);
+    const dangers = this.dangers.map((d) => ({ ...d.footprint, y: d.y }));
+    const fromXs = from.isMoving ? sweepSamples(from.x0) : [from.x];
+    const toXs = this.halfSweep(kind) ? sweepSamples(x) : [x];
+    for (const fx of fromXs) {
+      const safe = { x: fx, w: from.w, y: from.y };
+      for (const tx of toXs) {
+        if (!planSafePath(safe, dangers, tx, y, rise, tol)) return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * 假設 x 處生成尖刺平台，下一階（階距取最小、標準、最大三種）是否都還找得到合法的一般平台。
+   * 合法位置必須是一段至少 6px 寬的區間，避免剛好只有一個點可用。
+   */
+  leavesRoom(kind, x, index, y, riseOf) {
+    const spike = createPlatform(kind, index, x, y, { phase: 0 });
+    const saved = [this.last, this.dangers, this.recent];
+    this.last = spike;
+    this.dangers = [...this.dangers, spike];
+    this.recent = [...this.recent, spike];
+    let ok = true;
+    for (const gap of [CONFIG.PLATFORM_GAP - CONFIG.PLATFORM_JITTER, CONFIG.PLATFORM_GAP, CONFIG.PLATFORM_GAP + CONFIG.PLATFORM_JITTER]) {
+      let found = false;
+      for (let cx = this.minX; cx + 6 <= this.maxX && !found; cx += 2) {
+        found =
+          this.isValid(cx, Kind.NORMAL, index + 1, y + gap, riseOf) &&
+          this.isValid(cx + 6, Kind.NORMAL, index + 1, y + gap, riseOf);
+      }
+      if (!found) {
+        ok = false;
+        break;
+      }
+    }
+    [this.last, this.dangers, this.recent] = saved;
+    return ok;
+  }
+
+  /** 防呆：把一般平台放在 lastSafe 的正下方稍微偏移處，優先選有合法路徑的一側 */
+  fallback(index, y, riseOf) {
+    this.fallbackCount += 1;
+    const base = this.lastSafe.isMoving ? this.lastSafe.x0 : this.lastSafe.x;
+    const off = CONFIG.PLATFORM_W * CONFIG.MIN_OFFSET_RATIO + 1;
+    const xs = [base + off, base - off].map((x) => clamp(x, this.minX, this.maxX));
+    return xs.find((x) => this.hopReachable(x, Kind.NORMAL, index, y, riseOf)) ?? xs[0];
+  }
+}
+
+/** 橫移平台巡邏範圍內的幾個取樣位置（中心、±半幅、±全幅） */
+function sweepSamples(x0) {
+  const a = FX.MOVING_AMP;
+  return [x0 - a, x0 - a / 2, x0, x0 + a / 2, x0 + a];
+}
+
+// ── player.js ──
+class Player {
+  constructor() {
+    this.w = CONFIG.PLAYER_W;
+    this.h = CONFIG.PLAYER_H;
+    this.reset(0, 0);
+  }
+
+  reset(x, y) {
+    this.x = x;
+    this.y = y;
+    this.vx = 0;
+    this.vy = 0;
+    this.ground = null;      // 目前站立的平台
+    this.warp = null;        // 傳送中：指向正在傳送的傳送門（角色暫停、隱藏）
+    this.slide = false;      // 滑冰中：放開按鍵也不減速，直到踩上非冰面（空中保留）
+    this.ignoreId = -1;      // 撞天花板後要穿過的平台
+    this.hp = CONFIG.MAX_HP_UNITS;
+    this.invincible = 0;
+    this.streak = 0;         // 連續成功踩過的平台數（回血用）
+    this.facing = 1;
+    this.walkT = 0;
+  }
+
+  get bottom() {
+    return this.y + this.h;
+  }
+
+  get cx() {
+    return this.x + this.w / 2;
+  }
+
+  get isInvincible() {
+    return this.invincible > 0;
+  }
+
+  overlapsX(p) {
+    return this.x + this.w > p.x + 2 && this.x < p.x + p.w - 2;
+  }
+
+  /** 扣血並給予無敵時間；無敵中回傳 false */
+  damage(units) {
+    if (this.isInvincible) return false;
+    this.hp = Math.max(0, this.hp - units);
+    this.invincible = CONFIG.INVINCIBLE_TIME;
+    this.streak = 0;
+    return true;
+  }
+
+  /** 成功踩到一般平台；累積 15 次回 1 格。滿血時不累計。回傳是否有回血 */
+  registerSafeLanding() {
+    if (this.hp >= CONFIG.MAX_HP_UNITS) {
+      this.streak = 0;
+      return false;
+    }
+    this.streak += 1;
+    if (this.streak >= CONFIG.HEAL_STREAK) {
+      this.hp = Math.min(CONFIG.MAX_HP_UNITS, this.hp + 1);
+      this.streak = 0;
+      return true;
+    }
+    return false;
+  }
+
+  /** accelScale / speedScale：站在滑冰（加速度小）或泥沼（速度減半）上時由 World 傳進來 */
+  updateHorizontal(dt, axis, worldW, accelScale = 1, speedScale = 1, slideSpeed = 0) {
+    // 站在滑冰上：只看方向，不看按多大力（搖桿、陀螺儀的傾斜量都一樣），一律以固定的中等速度滑出去
+    if (slideSpeed && Math.abs(axis) >= 0.05) axis = Math.sign(axis);
+    const target = axis * (slideSpeed || CONFIG.MOVE_SPEED * speedScale);
+    // 滑冰：沒有按方向時不煞車，速度原封不動
+    if (!(this.slide && Math.abs(axis) < 0.05)) {
+      this.vx = approach(this.vx, target, CONFIG.MOVE_ACCEL * accelScale * dt);
+    }
+    this.x += this.vx * dt;
+    if (this.x < 0) {
+      this.x = 0;
+      this.vx = 0;
+    } else if (this.x + this.w > worldW) {
+      this.x = worldW - this.w;
+      this.vx = 0;
+    }
+    if (Math.abs(axis) > 0.05) this.facing = Math.sign(axis);
+    this.walkT += Math.abs(this.vx) * dt;
+    if (this.invincible > 0) this.invincible = Math.max(0, this.invincible - dt);
+  }
+}
+
+// ── world.js ──
+/**
+ * 純物理世界：角色、平台、生成器與每一步的物理，完全不碰畫面、輸入裝置與 DOM。
+ * Game（畫面版）與自動測試模擬器（autoTest.js）共用同一份物理，所以模擬結果就是遊戲裡真的會發生的事。
+ *
+ * 事件（events，全部選填）：
+ *   safeLand(p) hurt() heal() over() spring(p) flip(p) portalArm(portal) portal(dest|null, portal) stage(stage) endgame()
+ */
+
+/** 讓平台的 onLand 能通知外面、傳送角色、挑傳送門的落點 */
+function landContext(st, ev) {
+  return {
+    emit: (name, p) => ev[name] && ev[name](p),
+    platforms: st.platforms,
+    H: st.H,
+    rise: st.rise,
+    random: st.fxRng || Math.random,
+    teleportAir(pl, x, y, portal) {
+      pl.x = x;
+      pl.y = y;
+      pl.vx = 0;
+      pl.vy = 0;
+      pl.slide = false;
+      pl.ground = null;
+      pl.ignoreId = -1;
+      pl.warp = null;
+      if (ev.portal) ev.portal(null, portal);
+    },
+    // 傳到目標安全平台正上方的高空，速度與著地狀態清掉，之後照一般重力自由落下
+    teleport(pl, dest, portal, spawn) {
+      const sp = spawn || Portal.spawnPoint(dest, st.platforms); // spawn：傳送門已經算好的最終落點
+      pl.x = sp.x;
+      pl.y = sp.y;
+      pl.vx = 0;
+      pl.vy = 0;
+      pl.slide = false;
+      pl.ground = null;
+      pl.ignoreId = -1;
+      pl.warp = null;
+      if (ev.portal) ev.portal(dest, portal);
+    },
+  };
+}
+
+function land(st, p, ev) {
+  const pl = st.player;
+  pl.ground = p;
+  pl.vy = 0;
+  pl.y = p.y - pl.h;
+  st.floor = Math.max(st.floor, p.index);
+
+  if (p.isSpikes) {
+    if (pl.damage(CONFIG.SPIKE_DAMAGE)) hurt(st, ev, p);
+    pl.streak = 0;
+    return;
+  }
+  if (ev.safeLand) ev.safeLand(p);
+  if (pl.registerSafeLanding() && ev.heal) ev.heal();
+  p.onLand(pl, landContext(st, ev));
+}
+
+function hurt(st, ev, source) {
+  st.lastHurt = source || 'ceiling';
+  if (ev.hurt) ev.hurt(source);
+  if (st.player.hp <= 0) end(st, ev, source || 'ceiling');
+}
+
+function end(st, ev, cause) {
+  if (st.over) return;
+  st.over = true;
+  st.cause = cause;
+  if (ev.over) ev.over(cause);
+}
+
+function hitCeiling(st, ev) {
+  const pl = st.player;
+  if (pl.ground) pl.ignoreId = pl.ground.id; // 被刺下來，穿過腳下的平台
+  pl.ground = null;
+  pl.y = CONFIG.CEILING_Y;
+  pl.vy = Math.max(pl.vy, 80);
+  if (pl.damage(CONFIG.CEILING_DAMAGE)) hurt(st, ev, 'ceiling');
+}
+
+/**
+ * 物理推進一小步。st 需要：player、platforms、rise（目前上升速度）、H（畫面高度）、floor、depth、over。
+ * 這個函式會被機器人用來模擬「如果我往左走會怎樣」，所以不能有任何外部副作用。
+ */
+function stepWorld(st, dt, axis, ev = {}) {
+  const pl = st.player;
+  const lift = st.rise * dt;
+  for (const p of st.platforms) {
+    p.update(dt);
+    p.y -= lift;
+  }
+  st.depth += lift;
+
+  // 傳送中：傳送門已經消失，角色暫停（不受重力、不會被刺到），等動畫結束才出現在目的地
+  if (pl.warp) {
+    pl.warp.tick(dt, pl, landContext(st, ev));
+    return;
+  }
+
+  const under = pl.ground;
+  if (under) pl.slide = under.coasts; // 站上滑冰就開始滑；空中保留，踩到非冰面才解除
+  pl.updateHorizontal(dt, axis, CONFIG.WORLD_W, under ? under.accelScale : 1, under ? under.speedScale : 1, under ? under.slideSpeed : 0);
+  if (under && under.solid) {
+    const push = under.carry(dt); // 滾輪的推力、橫移平台帶著走
+    if (push) pl.x = clamp(pl.x + push, 0, CONFIG.WORLD_W - pl.w);
+  }
+
+  if (pl.ground) {
+    if (pl.ground.solid && pl.overlapsX(pl.ground)) {
+      pl.y = pl.ground.y - pl.h;
+    } else {
+      pl.ground = null; // 走出平台邊緣，或腳下的翻轉平台消失了
+      pl.vy = 0;
+    }
+  }
+
+  if (!pl.ground) {
+    const prevBottom = pl.bottom;
+    pl.vy = Math.min(pl.vy + CONFIG.GRAVITY * dt, CONFIG.MAX_FALL);
+    pl.y += pl.vy * dt;
+    if (pl.vy >= 0) {
+      // 單向平台：只有「上一步在平台上方、這一步穿過平台頂」才算踩到
+      for (const p of st.platforms) {
+        if (!p.solid || p.id === pl.ignoreId || !pl.overlapsX(p)) continue;
+        const prevTop = p.y + lift;
+        if (prevBottom <= prevTop + 0.5 && pl.bottom >= p.y) {
+          land(st, p, ev);
+          break;
+        }
+      }
+    }
+  }
+
+  // 雷射光束：開啟時掃到角色就扣血
+  if (!st.over) {
+    for (const p of st.platforms) {
+      if (p.kind === Kind.LASER && p.hits(pl)) {
+        if (pl.damage(CONFIG.SPIKE_DAMAGE)) hurt(st, ev, p);
+        break;
+      }
+    }
+  }
+
+  if (pl.ignoreId !== -1) {
+    const ignored = st.platforms.find((p) => p.id === pl.ignoreId);
+    if (!ignored || pl.y > ignored.y + ignored.h) pl.ignoreId = -1;
+  }
+
+  if (!st.over && pl.y < CONFIG.CEILING_Y) hitCeiling(st, ev);
+  if (!st.over && pl.y > st.H) end(st, ev, 'abyss');
+}
+
+class World {
+  constructor({ height = CONFIG.MIN_H, gameMode = 'standard', rng = Math.random, events = {} } = {}) {
+    this.H = height;
+    this.gameMode = gameMode;
+    this.rng = rng;
+    this.events = events;
+    this.player = new Player();
+    this.generator = new PlatformGenerator(CONFIG.WORLD_W, { rng });
+    this.fxRng = seededRandom(Math.floor(rng() * 4294967296)); // 傳送門落點專用，不影響關卡生成
+    this.stages = new StageManager(rng);
+    this.riseAt = (floor) => riseSpeedFor(this.gameMode, floor);
+    this.reset(height);
+  }
+
+  /** 目前的平台上升速度：由遊戲模式（標準 / 極速 / 地獄）與樓層決定，見 modes.js */
+  get rise() {
+    return this.riseAt(this.floor);
+  }
+
+  get stage() {
+    return this.stages.stageOf(Math.max(1, this.floor));
+  }
+
+  reset(height = this.H) {
+    this.H = height;
+    this.generator.reset();
+    const first = this.generator.createFirst(Math.round(this.H * 0.42));
+    this.platforms = [first];
+    this.floor = 0;
+    this.depth = 0;
+    this.over = false;
+    this.cause = null;
+    this.lastHurt = null;
+    this.stageId = 1;
+    this.endgame = false;
+    this.fillPlatforms();
+    this.player.reset(first.cx - this.player.w / 2, first.y - this.player.h);
+    this.player.ground = first;
+  }
+
+  fillPlatforms() {
+    let last = this.platforms[this.platforms.length - 1];
+    const limit = this.H + CONFIG.PLATFORM_GAP * 2;
+    while (last.y < limit) {
+      const y = last.y + CONFIG.PLATFORM_GAP + (this.rng() * 2 - 1) * CONFIG.PLATFORM_JITTER;
+      last = this.generator.next(y, this.riseAt, this.platforms);
+      this.platforms.push(last);
+    }
+  }
+
+  /** 推進 dt 秒（內部切成 <= 1/120 秒的子步） */
+  update(dt, axis) {
+    if (this.over) return;
+    const steps = Math.max(1, Math.ceil(dt / CONFIG.MAX_STEP));
+    const h = dt / steps;
+    for (let i = 0; i < steps && !this.over; i++) this.step(h, axis);
+    this.platforms = this.platforms.filter((p) => p.y + p.h > -20 && !p.dead);
+    this.fillPlatforms();
+    if (!this.endgame && this.floor >= FX.ENDGAME_FLOOR) {
+      this.endgame = true;
+      if (this.events.endgame) this.events.endgame();
+    }
+    const stage = this.stage;
+    if (stage.id !== this.stageId) {
+      this.stageId = stage.id;
+      if (this.events.stage) this.events.stage(stage);
+    }
+  }
+
+  step(dt, axis) {
+    stepWorld(this, dt, axis, this.events);
+  }
+}
+
+// ── gyro.js ──
+const GYRO_MESSAGES = Object.freeze({
+  denied: '陀螺儀權限已被拒絕，請至 Safari 設定開啟『動作與方向取用』',
+  unsupported: '這個瀏覽器不支援陀螺儀，請改用其他操控模式。',
+});
+
+/**
+ * 陀螺儀體感：讀取 deviceorientation 的 gamma（左右傾斜）。
+ * - iOS 13+ 必須在使用者手勢中呼叫 DeviceOrientationEvent.requestPermission()
+ * - 橫向握持時改用 beta，並依 screen.orientation 修正正負號
+ */
+class Gyro {
+  constructor() {
+    this.rawTilt = 0;     // 左右（相對螢幕）
+    this.rawPitch = 0;    // 前後，只用來畫姿態指示器的 Y
+    this.baseGamma = 0;   // 平衡點
+    this.basePitch = 0;
+    this.maxTilt = CONFIG.GYRO_DEFAULT_TILT;
+    this.listening = false;
+    this.lastEventAt = 0;
+    this.permission = 'unknown'; // unknown | granted | denied | unsupported
+    this.onOrientation = this.onOrientation.bind(this);
+  }
+
+  get supported() {
+    return typeof window !== 'undefined' && 'DeviceOrientationEvent' in window;
+  }
+
+  get needsPermission() {
+    return this.supported && typeof DeviceOrientationEvent.requestPermission === 'function';
+  }
+
+  /** 一定要在 click / touchend 等使用者手勢的同步流程中呼叫 */
+  requestPermission() {
+    if (!this.supported) {
+      this.permission = 'unsupported';
+      return Promise.resolve(this.permission);
+    }
+    if (this.permission === 'granted') {
+      this.start();
+      return Promise.resolve(this.permission);
+    }
+    if (!this.needsPermission) {
+      this.permission = 'granted';
+      this.start();
+      return Promise.resolve(this.permission);
+    }
+    return DeviceOrientationEvent.requestPermission()
+      .then((state) => {
+        this.permission = state === 'granted' ? 'granted' : 'denied';
+        if (this.permission === 'granted') this.start();
+        return this.permission;
+      })
+      .catch(() => {
+        this.permission = 'denied';
+        return this.permission;
+      });
+  }
+
+  start() {
+    if (this.listening) return;
+    window.addEventListener('deviceorientation', this.onOrientation);
+    this.listening = true;
+  }
+
+  stop() {
+    window.removeEventListener('deviceorientation', this.onOrientation);
+    this.listening = false;
+  }
+
+  onOrientation(e) {
+    if (e.gamma == null || e.beta == null) return;
+    const angle = (screen.orientation && screen.orientation.angle) ?? window.orientation ?? 0;
+    switch ((angle + 360) % 360) {
+      case 90:
+        this.rawTilt = e.beta;
+        this.rawPitch = -e.gamma;
+        break;
+      case 270:
+        this.rawTilt = -e.beta;
+        this.rawPitch = e.gamma;
+        break;
+      case 180:
+        this.rawTilt = -e.gamma;
+        this.rawPitch = -e.beta;
+        break;
+      default:
+        this.rawTilt = e.gamma;
+        this.rawPitch = e.beta;
+    }
+    this.lastEventAt = performance.now();
+  }
+
+  get hasSignal() {
+    return performance.now() - this.lastEventAt < 1000;
+  }
+
+  /** 以目前角度作為平衡點 (baseGamma) */
+  calibrate() {
+    this.baseGamma = this.rawTilt;
+    this.basePitch = this.rawPitch;
+  }
+
+  get axis() {
+    if (!this.hasSignal) return 0;
+    const delta = this.rawTilt - this.baseGamma;
+    return applyDeadzone(clamp(delta / this.maxTilt, -1, 1), CONFIG.GYRO_DEADZONE / this.maxTilt);
+  }
+
+  get pitchAxis() {
+    if (!this.hasSignal) return 0;
+    return clamp((this.rawPitch - this.basePitch) / this.maxTilt, -1, 1);
+  }
+}
+
+// ── input.js ──
+/*
+ * 每種操控模式都是一個 Control：
+ *   down/move/up(id, x, y, layout) 收到「邏輯座標」的指標事件
+ *   axis 回傳 -1(左) ~ 1(右)
+ *   draw(ctx, layout) 在畫布上畫出操控元件
+ * layout = { W, H }
+ */
+
+class Control {
+  constructor() {
+    this.axis = 0;
+  }
+  reset() {
+    this.axis = 0;
+  }
+  down() {}
+  move() {}
+  up() {}
+  draw() {}
+}
+
+/** 追蹤多指：最後按下的那根手指決定方向 */
+class HalfPressControl extends Control {
+  constructor() {
+    super();
+    this.pointers = new Map();
+  }
+  reset() {
+    super.reset();
+    this.pointers.clear();
+  }
+  sideAt(x, y, L) {
+    return x < L.W / 2 ? -1 : 1;
+  }
+  down(id, x, y, L) {
+    const side = this.sideAt(x, y, L);
+    if (side === 0) return;
+    this.pointers.set(id, side);
+    this.sync();
+  }
+  move(id, x, y, L) {
+    if (!this.pointers.has(id)) return;
+    const side = this.sideAt(x, y, L);
+    if (side !== 0) this.pointers.set(id, side);
+    this.sync();
+  }
+  up(id) {
+    this.pointers.delete(id);
+    this.sync();
+  }
+  sync() {
+    const sides = [...this.pointers.values()];
+    this.axis = sides.length ? sides[sides.length - 1] : 0;
+  }
+}
+
+function drawArrow(ctx, cx, cy, size, dir, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(cx + dir * size, cy);
+  ctx.lineTo(cx - dir * size * 0.6, cy - size);
+  ctx.lineTo(cx - dir * size * 0.6, cy + size);
+  ctx.closePath();
+  ctx.fill();
+}
+
+/** 模式一：點擊螢幕左/右半邊 */
+class TapControl extends HalfPressControl {
+  draw(ctx, L) {
+    const y = L.H - 60;
+    if (this.axis !== 0) {
+      ctx.fillStyle = 'rgba(255, 181, 71, 0.08)';
+      ctx.fillRect(this.axis < 0 ? 0 : L.W / 2, 0, L.W / 2, L.H);
+    }
+    drawArrow(ctx, 34, y, 14, -1, this.axis < 0 ? COLORS.controlActive : COLORS.control);
+    drawArrow(ctx, L.W - 34, y, 14, 1, this.axis > 0 ? COLORS.controlActive : COLORS.control);
+  }
+}
+
+/** 模式二：虛擬按鍵。畫出來的鈕比較小，但判定範圍是整個下方左右半區 */
+class ButtonsControl extends HalfPressControl {
+  hitTop(L) {
+    return L.H * 0.5;
+  }
+  sideAt(x, y, L) {
+    if (y < this.hitTop(L)) return 0;
+    return x < L.W / 2 ? -1 : 1;
+  }
+  draw(ctx, L) {
+    const r = 40;
+    const y = L.H - 74;
+    const spots = [
+      [L.W * 0.22, -1],
+      [L.W * 0.78, 1],
+    ];
+    for (const [x, dir] of spots) {
+      const active = this.axis === dir;
+      ctx.fillStyle = active ? 'rgba(255, 181, 71, 0.35)' : 'rgba(244, 240, 255, 0.10)';
+      ctx.strokeStyle = active ? COLORS.kid : 'rgba(244, 240, 255, 0.35)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      drawArrow(ctx, x + dir * 3, y, 15, dir, active ? COLORS.kid : 'rgba(244, 240, 255, 0.7)');
+    }
+    // 判定區的淡色分隔，讓玩家知道整個下半部都能按
+    ctx.strokeStyle = 'rgba(244, 240, 255, 0.06)';
+    ctx.setLineDash([4, 6]);
+    ctx.beginPath();
+    ctx.moveTo(L.W / 2, this.hitTop(L));
+    ctx.lineTo(L.W / 2, L.H);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+/**
+ * 模式三：跟隨手指的橫向虛擬搖桿
+ * 手指在下半部（y > H * 0.5）按下時，搖桿底座立刻出現在按下的位置，之後左右拖曳控制方向；
+ * 放開後搖桿隱藏，角色停止移動。
+ */
+class JoystickControl extends Control {
+  constructor() {
+    super();
+    this.pointerId = null;
+    this.baseX = 0;
+    this.baseY = 0;
+    this.knob = 0; // -R ~ R
+  }
+  radius(L) {
+    return Math.min(80, L.W * 0.22);
+  }
+  reset() {
+    super.reset();
+    this.pointerId = null;
+    this.knob = 0;
+  }
+  down(id, x, y, L) {
+    if (this.pointerId !== null || y <= L.H * 0.5) return;
+    this.pointerId = id;
+    this.baseX = x;
+    this.baseY = clamp(y, L.H * 0.5 + 30, L.H - 36);
+    this.knob = 0;
+    this.axis = 0;
+  }
+  move(id, x, y, L) {
+    if (id !== this.pointerId) return;
+    const R = this.radius(L);
+    this.knob = clamp(x - this.baseX, -R, R);
+    this.axis = applyDeadzone(this.knob / R, 0.12);
+  }
+  up(id) {
+    if (id !== this.pointerId) return;
+    this.pointerId = null;
+    this.knob = 0;
+    this.axis = 0;
+  }
+  draw(ctx, L) {
+    if (this.pointerId === null) {
+      ctx.fillStyle = 'rgba(244, 240, 255, 0.4)';
+      ctx.font = '600 12px "Noto Sans TC", system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('在下方按住並左右拖曳', L.W / 2, L.H - 14);
+      return;
+    }
+    const R = this.radius(L);
+    const { baseX: cx, baseY: cy } = this;
+    ctx.fillStyle = 'rgba(244, 240, 255, 0.08)';
+    ctx.strokeStyle = 'rgba(244, 240, 255, 0.28)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.roundRect(cx - R - 26, cy - 26, (R + 26) * 2, 52, 26);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(244, 240, 255, 0.18)';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - 12);
+    ctx.lineTo(cx, cy + 12);
+    ctx.stroke();
+    drawArrow(ctx, cx - R - 8, cy, 7, -1, 'rgba(244, 240, 255, 0.35)');
+    drawArrow(ctx, cx + R + 8, cy, 7, 1, 'rgba(244, 240, 255, 0.35)');
+    ctx.fillStyle = COLORS.kid;
+    ctx.beginPath();
+    ctx.arc(cx + this.knob, cy, 21, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/** 模式五：陀螺儀體感 + 中央姿態指示器 HUD */
+class GyroControl extends Control {
+  constructor(gyro) {
+    super();
+    this.gyro = gyro;
+  }
+  get axis() {
+    return this.gyro.axis;
+  }
+  set axis(_) {
+    /* 由陀螺儀決定，忽略指定 */
+  }
+  draw(ctx, L) {
+    const R = 54;
+    const cx = L.W / 2;
+    const cy = L.H / 2;
+    ctx.strokeStyle = 'rgba(244, 240, 255, 0.22)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(244, 240, 255, 0.1)';
+    ctx.beginPath();
+    ctx.moveTo(cx - R, cy);
+    ctx.lineTo(cx + R, cy);
+    ctx.moveTo(cx, cy - R);
+    ctx.lineTo(cx, cy + R);
+    ctx.stroke();
+    // 死區範圍
+    const dz = (CONFIG.GYRO_DEADZONE / this.gyro.maxTilt) * R;
+    ctx.fillStyle = 'rgba(244, 240, 255, 0.06)';
+    ctx.fillRect(cx - dz, cy - R, dz * 2, R * 2);
+
+    const raw = this.gyro.hasSignal
+      ? clamp((this.gyro.rawTilt - this.gyro.baseGamma) / this.gyro.maxTilt, -1, 1)
+      : 0;
+    const dx = raw * (R - 8);
+    const dy = this.gyro.pitchAxis * (R - 8);
+    ctx.fillStyle = this.gyro.hasSignal ? 'rgba(255, 181, 71, 0.75)' : 'rgba(244, 240, 255, 0.3)';
+    ctx.beginPath();
+    ctx.arc(cx + dx, cy + dy, 8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/**
+ * 管理所有輸入：指標事件 → 邏輯座標 → 目前的 Control；鍵盤方向鍵一律可用（桌機測試）
+ */
+class InputManager {
+  constructor(canvas, viewport, gyro) {
+    this.canvas = canvas;
+    this.viewport = viewport;
+    this.controls = {
+      tap: new TapControl(),
+      buttons: new ButtonsControl(),
+      joystick: new JoystickControl(),
+      gyro: new GyroControl(gyro),
+    };
+    this.mode = 'tap';
+    this.enabled = false;
+    this.keys = { left: false, right: false };
+    this.bind();
+  }
+
+  get current() {
+    return this.controls[this.mode];
+  }
+
+  get axis() {
+    const k = (this.keys.right ? 1 : 0) - (this.keys.left ? 1 : 0);
+    return k !== 0 ? k : this.current.axis;
+  }
+
+  setMode(mode) {
+    this.current.reset();
+    this.mode = mode;
+  }
+
+  setEnabled(on) {
+    this.enabled = on;
+    if (!on) this.reset();
+  }
+
+  reset() {
+    for (const c of Object.values(this.controls)) c.reset();
+    this.keys.left = this.keys.right = false;
+  }
+
+  layout() {
+    return { W: this.viewport.W, H: this.viewport.H };
+  }
+
+  bind() {
+    const c = this.canvas;
+    const route = (type) => (e) => {
+      e.preventDefault();
+      if (!this.enabled) return;
+      const { x, y } = this.viewport.toWorld(e.clientX, e.clientY);
+      if (type === 'down') {
+        try {
+          c.setPointerCapture(e.pointerId);
+        } catch {
+          /* 部分瀏覽器對合成事件會丟例外 */
+        }
+      }
+      this.current[type](e.pointerId, x, y, this.layout());
+    };
+    c.addEventListener('pointerdown', route('down'));
+    c.addEventListener('pointermove', route('move'));
+    c.addEventListener('pointerup', route('up'));
+    c.addEventListener('pointercancel', route('up'));
+    c.addEventListener('lostpointercapture', (e) => this.current.up(e.pointerId));
+
+    // 防止捲動、雙擊放大、長按選單
+    const block = (e) => e.preventDefault();
+    for (const t of ['touchstart', 'touchmove', 'touchend', 'touchcancel']) {
+      c.addEventListener(t, block, { passive: false });
+    }
+    c.addEventListener('contextmenu', block);
+    c.addEventListener('dblclick', block);
+    document.addEventListener('gesturestart', block, { passive: false });
+
+    const setKey = (e, down) => {
+      const k = e.key;
+      if (k === 'ArrowLeft' || k === 'a' || k === 'A') this.keys.left = down;
+      else if (k === 'ArrowRight' || k === 'd' || k === 'D') this.keys.right = down;
+      else return;
+      e.preventDefault();
+    };
+    window.addEventListener('keydown', (e) => setKey(e, true));
+    window.addEventListener('keyup', (e) => setKey(e, false));
+    window.addEventListener('blur', () => this.reset());
+  }
+
+  draw(ctx) {
+    this.current.draw(ctx, this.layout());
+  }
+}
+
+// ── viewport.js ──
+/**
+ * 依可用空間決定舞台大小與邏輯高度：
+ * - 寬度固定 360 邏輯單位，直式手機會鋪滿全螢幕
+ * - 高度依比例落在 MIN_H~MAX_H；桌機或橫向時左右留黑邊
+ * - Canvas 依 devicePixelRatio 提高解析度
+ */
+class Viewport {
+  constructor(app, stage, canvas) {
+    this.app = app;
+    this.stage = stage;
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.W = CONFIG.WORLD_W;
+    this.H = CONFIG.MIN_H;
+    this.scale = 1;
+    this.listeners = [];
+    this.resize = this.resize.bind(this);
+    window.addEventListener('resize', this.resize);
+    window.addEventListener('orientationchange', this.resize);
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', this.resize);
+    this.resize();
+  }
+
+  onResize(fn) {
+    this.listeners.push(fn);
+  }
+
+  resize() {
+    const cs = getComputedStyle(this.app);
+    const availW = this.app.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const availH = this.app.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    if (availW <= 0 || availH <= 0) return;
+
+    let scale = availW / CONFIG.WORLD_W;
+    let H = availH / scale;
+    if (H < CONFIG.MIN_H) {
+      H = CONFIG.MIN_H;
+      scale = availH / H;
+    }
+    H = clamp(H, CONFIG.MIN_H, CONFIG.MAX_H);
+
+    const cssW = Math.floor(CONFIG.WORLD_W * scale);
+    const cssH = Math.floor(H * scale);
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+
+    this.H = H;
+    this.scale = scale;
+    this.dpr = dpr;
+    this.stage.style.width = `${cssW}px`;
+    this.stage.style.height = `${cssH}px`;
+    this.stage.style.setProperty('--ui-scale', String(clamp(scale, 0.8, 1.6)));
+    this.canvas.width = Math.round(cssW * dpr);
+    this.canvas.height = Math.round(cssH * dpr);
+    this.listeners.forEach((fn) => fn(this));
+  }
+
+  /** 每幀開始前呼叫：把繪圖座標設成邏輯座標 */
+  beginFrame() {
+    const k = this.scale * this.dpr;
+    this.ctx.setTransform(k, 0, 0, k, 0, 0);
+    return this.ctx;
+  }
+
+  toWorld(clientX, clientY) {
+    const r = this.canvas.getBoundingClientRect();
+    return {
+      x: ((clientX - r.left) / r.width) * this.W,
+      y: ((clientY - r.top) / r.height) * this.H,
+    };
+  }
+}
+
+// ── renderer.js ──
+const DISPLAY_FONT = '"Bungee", "Noto Sans TC", system-ui, sans-serif';
+const BODY_FONT = '"Noto Sans TC", system-ui, sans-serif';
+
+function heartPath(ctx, x, y, s) {
+  // 以 (x, y) 為中心、寬約 2s 的愛心
+  ctx.beginPath();
+  ctx.moveTo(x, y + s * 0.85);
+  ctx.bezierCurveTo(x - s * 1.3, y - s * 0.1, x - s * 0.7, y - s * 1.05, x, y - s * 0.4);
+  ctx.bezierCurveTo(x + s * 0.7, y - s * 1.05, x + s * 1.3, y - s * 0.1, x, y + s * 0.85);
+  ctx.closePath();
+}
+
+class Renderer {
+  constructor(viewport) {
+    this.viewport = viewport;
+  }
+
+  /** game: 由 Game 提供的唯讀狀態 */
+  render(game, input) {
+    const ctx = this.viewport.beginFrame();
+    const W = this.viewport.W;
+    const H = this.viewport.H;
+
+    ctx.save();
+    if (game.shake > 0) {
+      const m = game.shake * 6;
+      ctx.translate((Math.random() - 0.5) * m, (Math.random() - 0.5) * m);
+    }
+    this.drawBackground(ctx, W, H, game.depth);
+    for (const p of game.platforms) this.drawPlatform(ctx, p, game.time);
+    this.drawPlayer(ctx, game.player, game.time);
+    this.drawCeiling(ctx, W);
+    ctx.restore();
+
+    if (game.flash > 0) {
+      ctx.fillStyle = `rgba(255, 93, 108, ${game.flash * 0.35})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+    if (game.healFlash > 0) {
+      ctx.fillStyle = `rgba(109, 255, 158, ${game.healFlash * 0.18})`;
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    if (game.state === 'playing' || game.state === 'countdown') input.draw(ctx);
+    this.drawHud(ctx, W, game);
+    if (game.state === 'countdown') this.drawCountdown(ctx, W, H, game.countdown);
+    if (game.goTimer > 0) this.drawGo(ctx, W, H, game.goTimer);
+  }
+
+  drawBackground(ctx, W, H, depth) {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, COLORS.shaftDeep);
+    g.addColorStop(0.35, COLORS.shaft);
+    g.addColorStop(1, COLORS.shaftDeep);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    // 兩側磚牆隨下降捲動，提供速度感
+    const bh = 18;
+    const off = -(depth % (bh * 2));
+    ctx.fillStyle = COLORS.brick;
+    ctx.fillRect(0, 0, 14, H);
+    ctx.fillRect(W - 14, 0, 14, H);
+    ctx.strokeStyle = COLORS.brickLine;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let y = off; y < H + bh; y += bh) {
+      ctx.moveTo(0, y);
+      ctx.lineTo(14, y);
+      ctx.moveTo(W - 14, y);
+      ctx.lineTo(W, y);
+      const odd = Math.round((y - off) / bh) % 2;
+      const sx = odd ? 7 : 0;
+      ctx.moveTo(sx, y);
+      ctx.lineTo(sx, y + bh);
+      ctx.moveTo(W - 14 + sx, y);
+      ctx.lineTo(W - 14 + sx, y + bh);
+    }
+    ctx.stroke();
+
+    // 遠景的小灰塵
+    ctx.fillStyle = 'rgba(164, 156, 207, 0.12)';
+    for (let i = 0; i < 18; i++) {
+      const x = (i * 97.3) % (W - 40) + 20;
+      const y = (((i * 151.7 - depth * 0.35) % H) + H) % H;
+      ctx.fillRect(x, y, 2, 2);
+    }
+  }
+
+  drawCeiling(ctx, W) {
+    const top = CONFIG.HUD_H;
+    const bottom = CONFIG.CEILING_Y;
+    ctx.fillStyle = COLORS.hud;
+    ctx.fillRect(0, 0, W, top);
+    ctx.fillStyle = COLORS.ceiling;
+    ctx.fillRect(0, top, W, 6);
+    const n = 18;
+    const sw = W / n;
+    ctx.fillStyle = COLORS.ceiling;
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      ctx.moveTo(i * sw, top + 6);
+      ctx.lineTo(i * sw + sw / 2, bottom);
+      ctx.lineTo((i + 1) * sw, top + 6);
+    }
+    ctx.fill();
+    ctx.fillStyle = 'rgba(14, 12, 31, 0.35)';
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      ctx.moveTo(i * sw + sw / 2, top + 6);
+      ctx.lineTo(i * sw + sw / 2, bottom);
+      ctx.lineTo((i + 1) * sw, top + 6);
+    }
+    ctx.fill();
+  }
+
+  /** 通用石板：上層 top、側面 shade，可以換顏色 */
+  slab(ctx, p, top, shade, hi, seams = true) {
+    const { x, y, w, h } = p;
+    ctx.fillStyle = shade;
+    ctx.beginPath();
+    ctx.roundRect(x, y + 2, w, h, 3);
+    ctx.fill();
+    ctx.fillStyle = top;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h - 2, 3);
+    ctx.fill();
+    ctx.fillStyle = hi;
+    ctx.fillRect(x + 3, y + 1, w - 6, 2);
+    if (seams) {
+      ctx.fillStyle = shade;
+      ctx.fillRect(x + w * 0.33, y + 4, 1, h - 6);
+      ctx.fillRect(x + w * 0.66, y + 4, 1, h - 6);
+    }
+  }
+
+  spikes(ctx, p, y = p.y) {
+    const { x, w, h } = p;
+    ctx.fillStyle = COLORS.spikeDark;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 3);
+    ctx.fill();
+    ctx.fillStyle = COLORS.spike;
+    const n = 7;
+    const sw = w / n;
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      ctx.moveTo(x + i * sw, y + 1);
+      ctx.lineTo(x + i * sw + sw / 2, y - 9);
+      ctx.lineTo(x + (i + 1) * sw, y + 1);
+    }
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
+    ctx.fillRect(x + 3, y + 2, w - 6, 2);
+  }
+
+  /** 橫移平台的巡邏軌道：平台下方一條淡淡的線，標出會移動到哪裡 */
+  rail(ctx, p, color) {
+    const f = p.footprint;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(f.x, p.y + p.h + 4);
+    ctx.lineTo(f.x + f.w, p.y + p.h + 4);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  arrows(ctx, p, color) {
+    const cy = p.y + p.h / 2;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(p.x + 7, cy);
+    ctx.lineTo(p.x + 12, cy - 3);
+    ctx.lineTo(p.x + 12, cy + 3);
+    ctx.moveTo(p.x + p.w - 7, cy);
+    ctx.lineTo(p.x + p.w - 12, cy - 3);
+    ctx.lineTo(p.x + p.w - 12, cy + 3);
+    ctx.fill();
+  }
+
+  /**
+   * 碎石：灰色的碎石塊拼成的平台。踩上去後每一塊各自劇烈抖動（震幅隨時間變大），
+   * 0.6 秒後瞬間碎裂，碎片往下掉並淡出。沒有進度條。
+   */
+  rubble(ctx, p, time) {
+    const { x, y, w, h } = p;
+    const n = 6;
+    const tw = w / n;
+    const tones = ['#9a9aa6', '#85858f', '#a9a9b4', '#7d7d88'];
+    if (p.state === 'gone') {
+      const s = FX.FLIP_FADE - p.fade; // 碎裂後經過的秒數
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, p.fade / FX.FLIP_FADE);
+      for (let i = 0; i < n * 2; i++) {
+        const seed = p.id * 31 + i * 17;
+        const vx = ((seed % 70) - 35) * 1.3;
+        const vy = -40 + (seed % 23) * 4;
+        const px = x + (i % n) * tw + vx * s;
+        const py = y + (i < n ? 0 : h / 2) + vy * s + 0.5 * 1500 * s * s;
+        ctx.save();
+        ctx.translate(px + tw / 2, py + h / 4);
+        ctx.rotate(s * (((seed % 9) - 4) * 2.2));
+        ctx.fillStyle = tones[seed % tones.length];
+        ctx.fillRect(-tw / 2, -h / 4, tw - 1, h / 2);
+        ctx.restore();
+      }
+      ctx.restore();
+      return;
+    }
+    const amp = p.state === 'armed' ? 0.8 + 2.6 * p.progress : 0;
+    for (let i = 0; i < n; i++) {
+      const jx = amp ? Math.sin(time * 90 + i * 2.3 + p.id) * amp : 0;
+      const jy = amp ? Math.cos(time * 77 + i * 1.7 + p.id) * amp * 0.7 : 0;
+      const tx = x + i * tw + jx;
+      ctx.fillStyle = tones[(i + p.id) % tones.length];
+      ctx.beginPath();
+      ctx.roundRect(tx, y + jy, tw - 1, h - 1, 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+      ctx.fillRect(tx + 1, y + jy + 1, tw - 3, 2);
+      ctx.fillStyle = 'rgba(30, 30, 40, 0.35)';
+      ctx.fillRect(tx + tw * 0.4, y + jy + 4, 1, h - 6); // 裂縫
+    }
+    if (p.state === 'armed') {
+      // 震動時揚起的小碎屑
+      ctx.fillStyle = 'rgba(200, 200, 210, 0.7)';
+      for (let i = 0; i < 4; i++) {
+        const k = (time * 5 + i * 0.37 + p.id) % 1;
+        ctx.fillRect(x + ((i * 23 + p.id * 7) % (w - 4)), y + h + k * 14, 2, 2);
+      }
+    }
+  }
+
+  /** 傳送門的預告：0.3 秒內在「即將傳送的地方」出現一個由小變大的漩渦，並用虛線連回傳送門 */
+  portalTarget(ctx, p, time) {
+    const pt = p.targetPoint();
+    if (!pt) return;
+    const prog = 1 - Math.max(0, p.pending.t) / FX.PORTAL_DELAY; // 0 → 1
+    const r = 6 + 22 * prog;
+    ctx.save();
+    ctx.strokeStyle = `rgba(216, 190, 255, ${0.25 + 0.4 * prog})`;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 4]);
+    ctx.beginPath();
+    ctx.moveTo(p.cx, p.y - 4);
+    ctx.lineTo(pt.x, pt.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const g = ctx.createRadialGradient(pt.x, pt.y, 1, pt.x, pt.y, r * 1.6);
+    g.addColorStop(0, `rgba(190, 150, 255, ${0.55 * prog + 0.2})`);
+    g.addColorStop(1, 'rgba(190, 150, 255, 0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(pt.x - r * 1.6, pt.y - r * 1.6, r * 3.2, r * 3.2);
+    ctx.strokeStyle = '#e9ddff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(pt.x, pt.y, r, r * 0.7, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(233, 221, 255, 0.7)';
+    ctx.beginPath();
+    ctx.ellipse(pt.x, pt.y, r * 0.55, r * 0.38, time * 9, 0, Math.PI * 1.5);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /** 雷射：黑色機座 + 紅色發射口。光束在開啟時是粗紅線，預警時是閃爍的細線 */
+  laser(ctx, p, time) {
+    const { x, y, w, h } = p;
+    this.slab(ctx, p, '#43435a', '#23233a', '#8a8aa8', false);
+    const cx = p.cx;
+    const on = p.beamOn;
+    ctx.fillStyle = on ? '#ff3b4d' : p.beamWarn ? '#ff9aa3' : '#7a2a35';
+    ctx.beginPath();
+    ctx.roundRect(cx - 9, y + h - 4, 18, 7, 3);
+    ctx.fill();
+    const b = p.beam;
+    if (on) {
+      const g = ctx.createLinearGradient(0, b.top, 0, b.bottom);
+      g.addColorStop(0, 'rgba(255, 70, 90, 0.95)');
+      g.addColorStop(1, 'rgba(255, 70, 90, 0.35)');
+      ctx.fillStyle = g;
+      ctx.fillRect(b.x, b.top, b.w, b.bottom - b.top);
+      ctx.fillStyle = 'rgba(255, 240, 240, 0.9)';
+      ctx.fillRect(cx - 2, b.top, 4, b.bottom - b.top);
+    } else if (p.beamWarn) {
+      if (Math.floor(time * 16) % 2 === 0) {
+        ctx.fillStyle = 'rgba(255, 90, 110, 0.55)';
+        ctx.fillRect(cx - 1, b.top, 2, b.bottom - b.top);
+      }
+    }
+  }
+
+  /** 幻影：半透明的紫青色平台。虛無時只剩虛線輪廓，切換前 0.3 秒閃爍 */
+  phantom(ctx, p, time) {
+    const { x, y, w, h } = p;
+    const warn = p.untilFlip < FX.PHANTOM_BLINK && Math.floor(time * 20) % 2 === 0;
+    if (p.solid) {
+      ctx.save();
+      ctx.globalAlpha = warn ? 0.45 : 0.9;
+      this.slab(ctx, p, '#7fe3e0', '#2f8f9a', '#dffffe', false);
+      ctx.restore();
+    } else {
+      ctx.save();
+      ctx.globalAlpha = warn ? 0.55 : 0.22;
+      ctx.strokeStyle = '#9ff3ee';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.roundRect(x + 0.5, y + 0.5, w - 1, h - 1, 3);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  drawPlatform(ctx, p, time = 0) {
+    const { x, y, w, h } = p;
+    switch (p.kind) {
+      case Kind.SPIKES:
+        this.spikes(ctx, p);
+        return;
+      case Kind.SPIKE_MOVING:
+        this.rail(ctx, p, 'rgba(255, 93, 108, 0.35)');
+        this.spikes(ctx, p);
+        this.arrows(ctx, p, 'rgba(255, 255, 255, 0.55)');
+        return;
+      case Kind.CONVEYOR: {
+        this.slab(ctx, p, '#6b7fa8', '#3c4a6b', '#aebfe3', false);
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h - 2, 3);
+        ctx.clip();
+        ctx.fillStyle = 'rgba(244, 240, 255, 0.55)';
+        const sp = 14;
+        const off = (((time * 28 * p.dir) % sp) + sp) % sp;
+        for (let cx = x - sp + off; cx < x + w + sp; cx += sp) {
+          const cy = y + (h - 2) / 2;
+          ctx.beginPath();
+          if (p.dir > 0) {
+            ctx.moveTo(cx, cy - 4);
+            ctx.lineTo(cx + 5, cy);
+            ctx.lineTo(cx, cy + 4);
+            ctx.lineTo(cx + 2, cy + 4);
+            ctx.lineTo(cx + 7, cy);
+            ctx.lineTo(cx + 2, cy - 4);
+          } else {
+            ctx.moveTo(cx + 7, cy - 4);
+            ctx.lineTo(cx + 2, cy);
+            ctx.lineTo(cx + 7, cy + 4);
+            ctx.lineTo(cx + 5, cy + 4);
+            ctx.lineTo(cx, cy);
+            ctx.lineTo(cx + 5, cy - 4);
+          }
+          ctx.closePath();
+          ctx.fill();
+        }
+        ctx.restore();
+        return;
+      }
+      case Kind.SPRING: {
+        this.slab(ctx, p, '#e0a13a', '#9a6a17', '#ffe0a0', false);
+        // 彈簧圈：剛彈起來時被壓扁再回彈
+        const coil = 9 * (1 - 0.6 * p.squash) * (p.charges > 0 ? 1 : 0.6);
+        const cx = p.cx;
+        ctx.strokeStyle = p.charges > 0 ? '#f4f0ff' : '#a49ccf';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cx - 9, y);
+        for (let i = 0; i < 4; i++) {
+          const yy = y - ((i + 1) * coil) / 4;
+          ctx.lineTo(cx + (i % 2 ? -9 : 9), yy);
+        }
+        ctx.lineTo(cx, y - coil - 1);
+        ctx.stroke();
+        ctx.fillStyle = COLORS.kid;
+        ctx.fillRect(cx - 11, y - coil - 3, 22, 3);
+        return;
+      }
+      case Kind.FLIP:
+        this.rubble(ctx, p, time);
+        return;
+      case Kind.ICE:
+        this.slab(ctx, p, '#c9ecff', '#6fb4e0', '#ffffff', false);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        for (let i = 0; i < 3; i++) {
+          const sx = x + 14 + i * 24;
+          ctx.moveTo(sx, y + h - 4);
+          ctx.lineTo(sx + 9, y + 3);
+        }
+        ctx.stroke();
+        return;
+      case Kind.SLIME: {
+        this.slab(ctx, p, '#a86bdc', '#5d2f8f', '#e6c9ff', false);
+        ctx.fillStyle = '#a86bdc';
+        ctx.beginPath();
+        for (let i = 0; i < 4; i++) {
+          const sx = x + 10 + i * 21;
+          const len = 4 + 3 * Math.sin(time * 3 + i * 1.7 + p.id);
+          ctx.moveTo(sx - 3, y + h - 3);
+          ctx.quadraticCurveTo(sx, y + h + len + 2, sx + 3, y + h - 3);
+        }
+        ctx.fill();
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.beginPath();
+        ctx.arc(x + 20 + ((time * 9 + p.id * 7) % 44), y + 4, 1.6, 0, Math.PI * 2);
+        ctx.fill();
+        return;
+      }
+      case Kind.MOVING:
+        this.rail(ctx, p, 'rgba(127, 214, 200, 0.4)');
+        this.slab(ctx, p, '#5fb3d6', '#2d6f8f', '#bfe7f7');
+        this.arrows(ctx, p, 'rgba(14, 12, 31, 0.6)');
+        return;
+      case Kind.LASER:
+        this.laser(ctx, p, time);
+        return;
+      case Kind.PHANTOM:
+        this.phantom(ctx, p, time);
+        return;
+      case Kind.PORTAL: {
+        this.portalTarget(ctx, p, time);
+        ctx.save();
+        if (p.pending) ctx.globalAlpha = Math.max(0, p.warpLeft / FX.PORTAL_DELAY); // 踩上去就淡出消失
+        const cx = p.cx;
+        const cy = y - 4;
+        const pulse = 0.7 + 0.3 * Math.sin(time * 6 + p.id);
+        const hot = p.flash > 0 ? 1.6 : 1;
+        const g = ctx.createRadialGradient(cx, cy, 2, cx, cy, 30 * hot);
+        g.addColorStop(0, `rgba(190, 150, 255, ${0.55 * pulse})`);
+        g.addColorStop(1, 'rgba(190, 150, 255, 0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(cx - 34, cy - 30, 68, 40);
+        this.slab(ctx, p, '#8b5cf6', '#4c2a9c', '#d8c8ff', false);
+        ctx.strokeStyle = '#e9ddff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, 14, 9, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(233, 221, 255, 0.7)';
+        ctx.beginPath();
+        ctx.ellipse(cx, cy, 8, 5, time * 3, 0, Math.PI * 1.5);
+        ctx.stroke();
+        ctx.restore();
+        return;
+      }
+      default:
+        this.slab(ctx, p, COLORS.stone, COLORS.stoneShade, COLORS.stoneTop);
+    }
+  }
+
+  drawPlayer(ctx, pl, time) {
+    if (pl.warp) return; // 傳送中：角色被吸進傳送門，還沒出現
+    if (pl.isInvincible && Math.floor(time * 12) % 2 === 0) return; // 無敵閃爍
+    const { x, y, w, h } = pl;
+    const cx = x + w / 2;
+    const moving = Math.abs(pl.vx) > 10 && pl.ground;
+    const step = moving ? Math.sin(pl.walkT * 0.18) * 3 : 0;
+
+    // 腿
+    ctx.fillStyle = COLORS.hair;
+    ctx.fillRect(cx - 6, y + h - 8 + Math.max(0, step), 4, 8 - Math.max(0, step));
+    ctx.fillRect(cx + 2, y + h - 8 + Math.max(0, -step), 4, 8 - Math.max(0, -step));
+    // 身體
+    ctx.fillStyle = COLORS.kid;
+    ctx.beginPath();
+    ctx.roundRect(cx - 9, y + 13, 18, h - 20, 4);
+    ctx.fill();
+    ctx.fillStyle = COLORS.kidDark;
+    ctx.fillRect(cx - 9, y + h - 11, 18, 3);
+    // 手（下落時舉高）
+    const armUp = pl.ground ? 0 : -6;
+    ctx.fillStyle = COLORS.skin;
+    ctx.fillRect(cx - 12, y + 15 + armUp, 3, 7);
+    ctx.fillRect(cx + 9, y + 15 + armUp, 3, 7);
+    // 頭
+    ctx.fillStyle = COLORS.skin;
+    ctx.beginPath();
+    ctx.arc(cx, y + 8, 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = COLORS.hair;
+    ctx.beginPath();
+    ctx.arc(cx, y + 6, 8, Math.PI * 1.05, Math.PI * 1.95);
+    ctx.fill();
+    // 眼睛朝面向方向
+    ctx.fillStyle = COLORS.hair;
+    const ex = pl.facing * 2.5;
+    ctx.fillRect(cx + ex - 3, y + 8, 2, 2.5);
+    ctx.fillRect(cx + ex + 2, y + 8, 2, 2.5);
+  }
+
+  drawHud(ctx, W, game) {
+    const pl = game.player;
+    const cy = CONFIG.HUD_H / 2;
+    // 3 顆愛心，每顆 2 格
+    for (let i = 0; i < CONFIG.MAX_HP_UNITS / 2; i++) {
+      const hx = 20 + i * 24;
+      const units = Math.max(0, Math.min(2, pl.hp - i * 2));
+      heartPath(ctx, hx, cy, 9);
+      ctx.fillStyle = COLORS.heartEmpty;
+      ctx.fill();
+      if (units > 0) {
+        ctx.save();
+        if (units === 1) {
+          ctx.beginPath();
+          ctx.rect(hx - 12, cy - 12, 12, 24);
+          ctx.clip();
+        }
+        heartPath(ctx, hx, cy, 9);
+        ctx.fillStyle = COLORS.heart;
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // 回血進度：連踩 n/15（滿血時隱藏）
+    if (pl.hp < CONFIG.MAX_HP_UNITS) {
+      const bx = 90;
+      ctx.fillStyle = COLORS.inkDim;
+      ctx.font = `600 9px ${BODY_FONT}`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`回血 ${pl.streak}/${CONFIG.HEAL_STREAK}`, bx, cy - 6);
+      ctx.fillStyle = COLORS.heartEmpty;
+      ctx.fillRect(bx, cy + 3, 46, 4);
+      ctx.fillStyle = COLORS.glow;
+      ctx.fillRect(bx, cy + 3, (46 * pl.streak) / CONFIG.HEAL_STREAK, 4);
+    }
+
+    // 樓層
+    ctx.fillStyle = COLORS.ink;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `20px ${DISPLAY_FONT}`;
+    ctx.fillText(`B${game.floor}F`, W / 2 + 6, cy + 1);
+
+    // 極速 / 地獄模式的倍率小標籤
+    if (game.gameMode !== 'standard') {
+      ctx.fillStyle = game.gameMode === 'nightmare' ? COLORS.spike : COLORS.kid;
+      ctx.font = `10px ${DISPLAY_FONT}`;
+      ctx.textAlign = 'left';
+      ctx.fillText(game.gameMode === 'nightmare' ? 'x2.0' : 'x1.5', W / 2 + 60, cy + 1);
+    }
+  }
+
+  drawCountdown(ctx, W, H, t) {
+    const n = Math.ceil(t);
+    if (n <= 0) return;
+    const frac = n - t; // 0 → 1
+    const s = 1 + (1 - frac) * 0.4;
+    ctx.save();
+    ctx.globalAlpha = 0.35 + 0.65 * (1 - frac * 0.6);
+    ctx.translate(W / 2, H * 0.36);
+    ctx.scale(s, s);
+    ctx.fillStyle = COLORS.kid;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `72px ${DISPLAY_FONT}`;
+    ctx.fillText(String(n), 0, 0);
+    ctx.restore();
+  }
+
+  drawGo(ctx, W, H, t) {
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, t * 2.5);
+    ctx.fillStyle = COLORS.glow;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `56px ${DISPLAY_FONT}`;
+    ctx.fillText('GO!', W / 2, H * 0.36);
+    ctx.restore();
+  }
+}
+
+// ── game.js ──
+/**
+ * 遊戲狀態機 + 主迴圈
+ * menu → countdown → playing ⇄ paused → over
+ *
+ * 物理、平台與生成全部在 World（world.js）；這裡只管狀態、倒數、輸入、畫面特效與 hooks。
+ * 主迴圈使用 requestAnimationFrame + Delta Time，物理每幀切成 <= 1/120 秒的子步，
+ * 60Hz / 90Hz / 120Hz / 144Hz 的速度與手感都一致。
+ */
+class Game {
+  constructor({ viewport, renderer, input, gyro, hooks = {} }) {
+    this.viewport = viewport;
+    this.renderer = renderer;
+    this.input = input;
+    this.gyro = gyro;
+    this.hooks = hooks;
+
+    this.world = new World({ height: viewport.H, events: this.worldEvents() });
+    this.state = 'menu';
+    this.pausedFrom = null;
+    this.autoCalibrate = true;
+    this.time = 0;
+
+    this.setupWorld();
+    this.lastT = null;
+    this.frame = this.frame.bind(this);
+    requestAnimationFrame(this.frame);
+  }
+
+  // World 的資料直接讀寫，renderer 與外部程式碼不用改
+  get player() { return this.world.player; }
+  get platforms() { return this.world.platforms; }
+  get generator() { return this.world.generator; }
+  get floor() { return this.world.floor; }
+  set floor(v) { this.world.floor = v; }
+  get depth() { return this.world.depth; }
+  get riseSpeed() { return this.world.rise; }
+  get stage() { return this.world.stage; }
+  get gameMode() { return this.world.gameMode; }
+  set gameMode(v) { this.world.gameMode = v; }
+
+  /** 物理世界發生的事 → 畫面特效與 hooks */
+  worldEvents() {
+    const h = () => this.hooks;
+    return {
+      safeLand: (p) => h().onSafeLand && h().onSafeLand(p),
+      hurt: (src) => this.onHurt(src),
+      heal: () => {
+        this.healFlash = 1;
+        if (h().onHeal) h().onHeal();
+      },
+      over: () => this.gameOver(),
+      spring: (p) => h().onFx && h().onFx('spring', p),
+      flip: (p) => h().onFx && h().onFx('flip', p),
+      portalArm: (portal) => h().onFx && h().onFx('portalArm', portal),
+      portal: (dest, portal) => {
+        this.flash = Math.max(this.flash, 0.5);
+        if (h().onFx) h().onFx('portal', portal);
+      },
+      stage: (stage) => h().onStage && h().onStage(stage),
+      endgame: () => h().onEndgame && h().onEndgame(),
+    };
+  }
+
+  setupWorld() {
+    this.world.reset(this.viewport.H);
+    this.shake = 0;
+    this.flash = 0;
+    this.healFlash = 0;
+    this.goTimer = 0;
+    this.countdown = 0;
+  }
+
+  // ───────── 狀態切換 ─────────
+
+  start() {
+    this.setupWorld();
+    if (this.hooks.onRunStart) this.hooks.onRunStart();
+    this.beginCountdown();
+    this.input.setEnabled(true);
+  }
+
+  pause() {
+    if (this.state !== 'playing' && this.state !== 'countdown') return false;
+    this.pausedFrom = this.state;
+    this.setState('paused');
+    this.input.setEnabled(false);
+    return true;
+  }
+
+  /** 繼續遊戲：同樣先倒數 3、2、1，倒數期間物理與平台上升都停止 */
+  resume() {
+    if (this.state !== 'paused') return;
+    this.beginCountdown();
+    this.input.setEnabled(true);
+    this.lastT = null;
+  }
+
+  beginCountdown() {
+    this.countdown = CONFIG.COUNTDOWN;
+    this.goTimer = 0;
+    this.lastTick = CONFIG.COUNTDOWN;
+    this.setState('countdown');
+    if (this.hooks.onTick) this.hooks.onTick(CONFIG.COUNTDOWN);
+  }
+
+  setState(next) {
+    this.state = next;
+    if (this.hooks.onState) this.hooks.onState(next);
+  }
+
+  toMenu() {
+    this.setState('menu');
+    this.input.setEnabled(false);
+    this.setupWorld();
+  }
+
+  calibrateGyro(auto = false) {
+    this.gyro.calibrate();
+    if (this.hooks.onCalibrated) this.hooks.onCalibrated(auto);
+  }
+
+  // ───────── 主迴圈 ─────────
+
+  frame(t) {
+    requestAnimationFrame(this.frame);
+    const dt = this.lastT == null ? 0 : Math.min((t - this.lastT) / 1000, CONFIG.MAX_FRAME_DT);
+    this.lastT = t;
+    this.update(dt);
+    this.renderer.render(this, this.input);
+  }
+
+  update(dt) {
+    if (this.state === 'paused') return;
+    this.time += dt;
+    this.shake = Math.max(0, this.shake - dt * 2.2);
+    this.flash = Math.max(0, this.flash - dt * 2.5);
+    this.healFlash = Math.max(0, this.healFlash - dt * 1.5);
+    this.goTimer = Math.max(0, this.goTimer - dt);
+
+    if (this.state === 'countdown') {
+      const prev = this.countdown;
+      this.countdown -= dt;
+      const shown = Math.ceil(this.countdown);
+      if (shown > 0 && shown < this.lastTick) {
+        this.lastTick = shown;
+        if (this.hooks.onTick) this.hooks.onTick(shown);
+      }
+      // 「1」結束、0 秒的瞬間：擷取平衡點並開始（開局與暫停後繼續都一樣）
+      if (prev > 0 && this.countdown <= 0) this.onGo();
+      return;
+    }
+    if (this.state !== 'playing') return;
+
+    this.world.update(dt, this.input.axis);
+  }
+
+  onGo() {
+    this.countdown = 0;
+    this.setState('playing');
+    this.goTimer = 0.6;
+    if (this.input.mode === 'gyro' && this.autoCalibrate) this.calibrateGyro(true);
+    if (this.hooks.onGo) this.hooks.onGo();
+  }
+
+  // ───────── 事件 ─────────
+
+  onHurt(src) {
+    if (this.hooks.onHurt) this.hooks.onHurt(src);
+    this.shake = 0.7;
+    this.flash = 1;
+    if (navigator.vibrate) {
+      try {
+        navigator.vibrate(60);
+      } catch {
+        /* 不支援震動 */
+      }
+    }
+  }
+
+  gameOver() {
+    if (this.state !== 'playing') return;
+    this.setState('over');
+    this.shake = 1;
+    this.input.setEnabled(false);
+    if (this.hooks.onGameOver) this.hooks.onGameOver(this.floor);
+  }
+}
+
+// ── supabase.js ──
+// Supabase 排行榜。SDK 從 CDN 在第一次需要時才載入，所以連不上網路時遊戲本身不受影響。
+// 這是 role=anon 的 JWT（舊式 anon key，到 2036 年到期），本來就是設計給前端公開使用的；絕對不要換成 service_role key；能做什麼完全由資料庫的 RLS 與 CHECK 限制決定（見 sql/leaderboard.sql）。
+const SUPABASE_URL = 'https://bxealvfsbivinybhvule.supabase.co';
+const SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4ZWFsdmZzYml2aW55Ymh2dWxlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI1ODUwOTQsImV4cCI6MjEwODE2MTA5NH0.MtH_VK-3yAuuh3OlN6TXB08CsKkjfV2dkpk6TCGzRas';
+const SUPABASE_SDK_URL = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js';
+
+const TABLE = 'leaderboard';
+const REQUEST_TIMEOUT_MS = 10000;
+const NAME_MAX = 12;
+const TOP_LIMIT = 100;
+
+/**
+ * 兩條賽道：標準（標準 1.0x + 極速 1.5x 共用）與地獄（2.0x 獨佔）。
+ * 操控方式不分賽道，只用 input_type 標記（'button' 或 'gyro'）。
+ */
+const TRACKS = [
+  { id: 'standard', label: '標準賽道', tab: '標準賽道 Top 100', note: '收錄標準模式（1.0x）與極速模式（1.5x）的成績。' },
+  { id: 'nightmare', label: '地獄賽道', tab: '地獄賽道 Top 100', note: '只收地獄模式（2.0x）的成績。' },
+];
+
+const trackById = (id) => TRACKS.find((t) => t.id === id) || TRACKS[0];
+const trackOfMode = (modeId) => trackById(gameModeById(modeId).trackId);
+
+function cleanName(raw) {
+  const text = String(raw ?? '')
+    .replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return Array.from(text).slice(0, NAME_MAX).join('');
+}
+
+let clientPromise = null;
+
+function loadSdk() {
+  if (window.supabase && window.supabase.createClient) return Promise.resolve(window.supabase);
+  return new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = SUPABASE_SDK_URL;
+    script.async = true;
+    script.crossOrigin = 'anonymous';
+    script.onload = () => (window.supabase && window.supabase.createClient ? resolve(window.supabase) : reject(new Error('sdk-missing')));
+    script.onerror = () => reject(new Error('sdk-load-failed'));
+    document.head.append(script);
+  });
+}
+
+/** 取得（並在需要時初始化）Supabase client；載入失敗後下次會重試 */
+function getClient() {
+  if (!clientPromise) {
+    clientPromise = loadSdk()
+      .then((lib) => lib.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } }))
+      .catch((err) => {
+        clientPromise = null;
+        throw err;
+      });
+  }
+  return clientPromise;
+}
+
+function withTimeout(promise) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error('timeout')), REQUEST_TIMEOUT_MS);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+async function query(build) {
+  const client = await withTimeout(getClient());
+  const { data, error, count, status } = await withTimeout(build(client.from(TABLE)));
+  if (error) {
+    const err = new Error(error.message || 'request-failed');
+    err.status = status;
+    err.code = error.code;
+    console.warn('[supabase]', status, error.code, error.message, error.hint || '');
+    throw err;
+  }
+  return { data, count };
+}
+
+/** 該賽道前 100 名：分數高到低，同分先到的在前 */
+async function fetchTop(trackId) {
+  const { data } = await query((t) =>
+    t
+      .select('player_name, score, mode, input_type, created_at')
+      .eq('track_id', trackById(trackId).id)
+      .order('score', { ascending: false })
+      .order('created_at', { ascending: true })
+      .limit(TOP_LIMIT),
+  );
+  return data || [];
+}
+
+/** mode = 遊戲模式（standard | turbo | nightmare）；inputType = 'button' | 'gyro' */
+async function submitScore({ name, score, mode, inputType }) {
+  const player_name = cleanName(name);
+  if (!player_name) throw new Error('empty-name');
+  if (!Number.isInteger(score) || score < 1) throw new Error('bad-score');
+  const input_type = inputType === 'gyro' ? 'gyro' : 'button';
+  await query((t) => t.insert({ player_name, score, mode, track_id: trackOfMode(mode).id, input_type }));
+  return player_name;
+}
+
+/** 全局名次 = 該賽道分數比你高的人數 + 1（同分並列同名次） */
+async function fetchRank(trackId, score) {
+  const { count } = await query((t) =>
+    t.select('id', { count: 'exact', head: true }).eq('track_id', trackById(trackId).id).gt('score', score),
+  );
+  return (count ?? 0) + 1;
+}
+
+/** 把錯誤翻成給玩家看的一行：帶上 HTTP 狀態與伺服器訊息，方便對照排查 */
+function describeError(err) {
+  const msg = (err && err.message) || '';
+  if (msg === 'timeout') return '連線逾時。';
+  if (msg === 'sdk-load-failed' || msg === 'sdk-missing') return '無法載入 Supabase SDK（CDN 可能被擋）。';
+  const status = err && err.status;
+  if (!status) return '網路連不上 Supabase。';
+  let hint = '';
+  if (/permission denied/i.test(msg)) hint = '資料表沒有開放 anon 權限，請在 SQL Editor 執行 GRANT（見 sql/leaderboard.sql）。';
+  else if (/invalid api key|invalid jwt|jwt/i.test(msg)) hint = 'API key 無效、被停用或已輪替，請到 Dashboard → API Keys 重新複製。';
+  else if (/no api key/i.test(msg)) hint = '請求沒有帶 apikey。';
+  else if (/relation .* does not exist|could not find the table/i.test(msg)) hint = '資料表還沒建立，請先執行 sql/leaderboard.sql。';
+  return `錯誤 ${status}：${msg}${hint ? '。' + hint : ''}`;
+}
+
+// ── ui.js ──
+const MIC_TEXT = {
+  off: '未啟用',
+  on: '已啟用，聲音只留在這台裝置',
+  denied: '權限被拒絕。請到瀏覽器的網站設定開啟麥克風，再按一次啟用',
+  unavailable: '這個環境無法使用麥克風（需要 HTTPS 網頁，且不能是內嵌預覽）',
+};
+
+/** DOM 選單、HUD 按鈕、提示訊息、確認視窗、自訂錄音槽位與死前重播面板 */
+class UI {
+  constructor() {
+    const $ = (id) => document.getElementById(id);
+    this.$ = $;
+    this.screens = {
+      title: $('screen-title'),
+      settings: $('screen-settings'),
+      pause: $('screen-pause'),
+      over: $('screen-over'),
+      leaderboard: $('screen-leaderboard'),
+    };
+    this.hudButtons = $('hud-buttons');
+    this.btnCalibrate = $('btn-calibrate');
+    this.btnRecalibrate = $('btn-recalibrate');
+    this.toastEl = $('toast');
+    this.toastTimer = 0;
+    this.confirmEl = $('screen-confirm');
+    this.confirmResolve = null;
+    this.buildModeList();
+    this.buildGameModeList();
+    this.buildSlots();
+  }
+
+  // ───────── 操控模式清單 ─────────
+
+  buildModeList() {
+    const list = this.$('mode-list');
+    CONTROL_MODES.forEach((mode, i) => {
+      const label = document.createElement('label');
+      label.className = 'mode-option';
+      label.htmlFor = `mode-${mode.id}`;
+
+      const input = document.createElement('input');
+      input.type = 'radio';
+      input.name = 'mode';
+      input.id = `mode-${mode.id}`;
+      input.value = mode.id;
+
+      const card = document.createElement('span');
+      card.className = 'mode-card';
+      const num = document.createElement('span');
+      num.className = 'mode-num';
+      num.textContent = String(i + 1);
+      const name = document.createElement('span');
+      name.className = 'mode-name';
+      name.textContent = mode.name;
+      if (mode.hard) {
+        const tag = document.createElement('em');
+        tag.textContent = '困難';
+        name.append(tag);
+      }
+      const desc = document.createElement('span');
+      desc.className = 'mode-desc';
+      desc.textContent = mode.desc;
+      card.append(num, name, desc);
+      label.append(input, card);
+      list.append(label);
+    });
+  }
+
+  /** 遊戲模式（速度）：標準 / 極速 / 地獄 */
+  buildGameModeList() {
+    const list = this.$('gamemode-list');
+    for (const mode of GAME_MODES) {
+      const label = document.createElement('label');
+      label.className = 'mode-option';
+      label.htmlFor = `gamemode-${mode.id}`;
+      const input = document.createElement('input');
+      input.type = 'radio';
+      input.name = 'gamemode';
+      input.id = `gamemode-${mode.id}`;
+      input.value = mode.id;
+      const card = document.createElement('span');
+      card.className = 'mode-card';
+      const num = document.createElement('span');
+      num.className = 'mode-num';
+      num.textContent = mode.badge;
+      const name = document.createElement('span');
+      name.className = 'mode-name';
+      name.dataset.base = mode.name;
+      name.textContent = mode.name;
+      const desc = document.createElement('span');
+      desc.className = 'mode-desc';
+      desc.textContent = mode.desc;
+      card.append(num, name, desc);
+      label.append(input, card);
+      list.append(label);
+    }
+  }
+
+  // ───────── 畫面切換與提示 ─────────
+
+  /** 顯示指定畫面；傳 null 代表全部隱藏（遊玩中） */
+  show(name) {
+    for (const [key, el] of Object.entries(this.screens)) {
+      el.hidden = key !== name;
+      if (key === name) el.scrollTop = 0;
+    }
+  }
+
+  setPlayingHud(visible, gyroMode) {
+    this.hudButtons.hidden = !visible;
+    this.btnCalibrate.hidden = !gyroMode;
+    this.btnRecalibrate.hidden = !gyroMode;
+  }
+
+  toast(message, ms = 1800) {
+    this.toastEl.textContent = message;
+    this.toastEl.hidden = false;
+    // 重新觸發進場動畫
+    this.toastEl.style.animation = 'none';
+    void this.toastEl.offsetWidth;
+    this.toastEl.style.animation = '';
+    clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(() => {
+      this.toastEl.hidden = true;
+    }, ms);
+  }
+
+  /**
+   * 輕量確認視窗。不用原生 confirm()：內嵌預覽與部分 WebView 會直接回傳 false，按鈕就永遠沒反應。
+   * 回傳 Promise<boolean>；按 Esc 或點背景等同取消。
+   */
+  confirm(message, { ok = '確定', cancel = '取消' } = {}) {
+    if (this.confirmResolve) this.closeConfirm(false);
+    this.$('confirm-message').textContent = message;
+    this.$('confirm-ok').textContent = ok;
+    this.$('confirm-cancel').textContent = cancel;
+    this.confirmEl.hidden = false;
+    this.$('confirm-cancel').focus();
+    return new Promise((resolve) => {
+      this.confirmResolve = resolve;
+    });
+  }
+
+  get confirmOpen() {
+    return !this.confirmEl.hidden;
+  }
+
+  closeConfirm(result) {
+    const resolve = this.confirmResolve;
+    this.confirmResolve = null;
+    this.confirmEl.hidden = true;
+    if (resolve) resolve(result);
+  }
+
+  bindConfirm() {
+    this.$('confirm-ok').addEventListener('click', () => this.closeConfirm(true));
+    this.$('confirm-cancel').addEventListener('click', () => this.closeConfirm(false));
+    this.confirmEl.addEventListener('pointerdown', (e) => {
+      if (e.target === this.confirmEl) this.closeConfirm(false);
+    });
+  }
+
+  // ───────── 設定 ─────────
+
+  /**
+   * opts.bests：各模式最佳紀錄，用來判斷地獄模式有沒有解鎖
+   * opts.lockGameMode：遊戲進行中（從暫停選單進來）不能換遊戲模式
+   */
+  syncSettings(settings, { bests = null, lockGameMode = false } = {}) {
+    const radio = this.$(`mode-${settings.mode}`);
+    if (radio) radio.checked = true;
+    this.$('opt-autocal').checked = settings.autoCalibrate;
+    this.$('opt-tilt').value = String(settings.gyroTilt);
+    this.$('opt-tilt-out').textContent = String(settings.gyroTilt);
+    this.$('opt-sfx').checked = settings.sfx;
+    this.$('opt-replay').checked = settings.deathReplay;
+    this.$('gyro-options').disabled = settings.mode !== 'gyro';
+    const mode = CONTROL_MODES.find((m) => m.id === settings.mode);
+    const gm = gameModeById(settings.gameMode);
+    this.$('title-mode').textContent = `${gm.name} ${gm.badge} · ${mode ? mode.name : ''}`;
+
+    if (bests) {
+      for (const m of GAME_MODES) {
+        const input = this.$(`gamemode-${m.id}`);
+        const unlocked = isModeUnlocked(m.id, bests);
+        input.checked = m.id === settings.gameMode;
+        input.disabled = lockGameMode || !unlocked;
+        const name = input.parentElement.querySelector('.mode-name');
+        name.textContent = unlocked ? m.name : `🔒 ${m.name}`;
+      }
+      const hell = !isModeUnlocked('nightmare', bests);
+      this.$('gamemode-note').textContent = lockGameMode
+        ? '遊戲進行中不能換遊戲模式，回主選單後再選。'
+        : hell
+          ? `地獄模式還沒解鎖：標準或極速模式要打到 B150F（目前最高 B${Math.max(bests.standard, bests.turbo)}F）。`
+          : '地獄模式已解鎖。';
+    }
+  }
+
+  setBest(best) {
+    this.$('title-best').textContent = `B${best}F`;
+  }
+
+  setGyroStatus(text) {
+    this.$('gyro-status').textContent = text;
+  }
+
+  // ───────── 麥克風與自訂錄音槽位 ─────────
+
+  setMicStatus(state) {
+    this.$('mic-status').textContent = MIC_TEXT[state] || MIC_TEXT.off;
+    this.$('mic-status').dataset.state = state;
+    this.$('btn-mic').textContent = state === 'on' ? '關閉' : '啟用';
+    this.micState = state;
+    this.syncRecButtons();
+  }
+
+  /** 錄音按鈕要「麥克風已啟用」而且「語音包已解鎖」才能按 */
+  syncRecButtons() {
+    const ok = this.micState === 'on' && this.voiceUnlocked !== false;
+    for (const btn of document.querySelectorAll('.slot-btn[data-act="rec"]')) {
+      btn.setAttribute('aria-disabled', String(!ok));
+    }
+  }
+
+  /** 自訂語音包：最高紀錄到 unlockFloor 才開放 */
+  setVoiceLock(unlocked, best, unlockFloor) {
+    this.voiceUnlocked = unlocked;
+    const note = this.$('voice-lock');
+    note.hidden = unlocked;
+    note.textContent = `🔒 最高紀錄達到 B${unlockFloor}F 就能解鎖自訂語音包（目前 B${best}F）`;
+    document.querySelector('.custom-sfx').classList.toggle('is-locked', !unlocked);
+    this.syncRecButtons();
+  }
+
+  buildSlots() {
+    for (const kind of CLIP_KINDS) {
+      const box = this.$(`slots-${kind.id}`);
+      for (const slot of AUDIO.SLOTS) {
+        const id = slotId(kind.id, slot);
+        const row = document.createElement('div');
+        row.className = 'slot';
+        row.dataset.id = id;
+        row.innerHTML = `
+          <span class="slot-name">${slot}</span>
+          <span class="slot-state" data-filled="false">空</span>
+          <button type="button" class="slot-btn" data-act="rec" aria-disabled="true" aria-label="${kind.title} ${slot}：按住錄音，放開結束">⏺️</button>
+          <button type="button" class="slot-btn" data-act="play" disabled aria-label="${kind.title} ${slot}：試聽">▶️</button>
+          <button type="button" class="slot-btn" data-act="del" disabled aria-label="${kind.title} ${slot}：刪除">🗑️</button>`;
+        box.append(row);
+      }
+    }
+  }
+
+  slotRow(id) {
+    return document.querySelector(`.slot[data-id="${id}"]`);
+  }
+
+  /** handlers: { onRecStart(id), onRecEnd(id), onPlay(id), onDelete(id) } */
+  bindSlots({ onRecStart, onRecEnd, onPlay, onDelete }) {
+    for (const row of document.querySelectorAll('.slot')) {
+      const id = row.dataset.id;
+      const rec = row.querySelector('[data-act="rec"]');
+      let held = false;
+      const begin = () => {
+        if (held) return;
+        held = true;
+        onRecStart(id);
+      };
+      const end = () => {
+        if (!held) return;
+        held = false;
+        onRecEnd(id);
+      };
+      rec.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        try {
+          rec.setPointerCapture(e.pointerId);
+        } catch {
+          /* 合成事件可能無法捕捉 */
+        }
+        begin();
+      });
+      for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) rec.addEventListener(type, end);
+      rec.addEventListener('contextmenu', (e) => e.preventDefault());
+      rec.addEventListener('keydown', (e) => {
+        if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) {
+          e.preventDefault();
+          begin();
+        }
+      });
+      rec.addEventListener('keyup', (e) => {
+        if (e.key === ' ' || e.key === 'Enter') end();
+      });
+      row.querySelector('[data-act="play"]').addEventListener('click', () => onPlay(id));
+      row.querySelector('[data-act="del"]').addEventListener('click', () => onDelete(id));
+    }
+  }
+
+  setSlotState(id, filled, seconds) {
+    const row = this.slotRow(id);
+    if (!row) return;
+    const state = row.querySelector('.slot-state');
+    state.dataset.filled = String(filled);
+    state.textContent = filled ? (seconds ? `${seconds.toFixed(1)} 秒` : '已錄音') : '空';
+    row.querySelector('[data-act="play"]').disabled = !filled;
+    row.querySelector('[data-act="del"]').disabled = !filled;
+  }
+
+  setSlotRecording(id, on) {
+    const row = this.slotRow(id);
+    if (!row) return;
+    row.classList.toggle('is-recording', on);
+    if (on) row.querySelector('.slot-state').textContent = '錄音中…';
+  }
+
+  // ───────── 排行榜 ─────────
+
+  /** handlers: { onTab(trackId), onRetry() } */
+  bindLeaderboard({ onTab, onRetry }) {
+    for (const tab of document.querySelectorAll('.tab[data-track]')) {
+      tab.addEventListener('click', () => onTab(tab.dataset.track));
+    }
+    this.$('btn-board-retry').addEventListener('click', onRetry);
+  }
+
+  setBoardTab(trackId) {
+    for (const tab of document.querySelectorAll('.tab[data-track]')) {
+      tab.setAttribute('aria-selected', String(tab.dataset.track === trackId));
+    }
+    const track = TRACKS.find((t) => t.id === trackId) || TRACKS[0];
+    this.$('board-note').textContent = `${track.note}📱 代表用陀螺儀體感玩的成績。`;
+    this.$('board-list').setAttribute('aria-label', track.tab);
+  }
+
+  /** 地獄賽道分頁還沒解鎖時加上 🔒 */
+  setBoardLocks(lockedTracks) {
+    for (const t of TRACKS) {
+      this.$(`tab-${t.id}`).textContent = `${lockedTracks.includes(t.id) ? '🔒 ' : ''}${t.tab}`;
+    }
+  }
+
+  setBoardStatus(text, { retry = false } = {}) {
+    const box = this.$('board-status');
+    box.hidden = !text;
+    box.textContent = text;
+    this.$('btn-board-retry').hidden = !retry;
+    if (text) this.$('board-list').replaceChildren();
+  }
+
+  /** rows: [{ player_name, score, created_at }]；highlight(row) 回傳 true 的那一列會標成「我」 */
+  renderBoard(rows, highlight = () => false) {
+    if (!rows.length) {
+      this.setBoardStatus('還沒有人上榜，來當第一名吧！');
+      return;
+    }
+    this.setBoardStatus('');
+    let mine = null;
+    const items = rows.map((row, i) => {
+      const li = document.createElement('li');
+      li.className = 'board-row';
+      const rank = document.createElement('span');
+      rank.className = 'board-rank';
+      rank.textContent = String(i + 1);
+      const name = document.createElement('span');
+      name.className = 'board-name';
+      name.textContent = row.player_name;
+      if (row.input_type === 'gyro') {
+        const badge = document.createElement('span');
+        badge.className = 'gyro-badge';
+        badge.textContent = '📱';
+        badge.title = '體感操控';
+        badge.setAttribute('aria-label', '體感操控');
+        name.append(' ', badge);
+      }
+      const score = document.createElement('span');
+      score.className = 'board-score';
+      score.textContent = `B${row.score}F`;
+      const date = document.createElement('span');
+      date.className = 'board-date';
+      date.textContent = formatDate(row.created_at);
+      li.append(rank, name, score, date);
+      if (!mine && highlight(row)) {
+        mine = li;
+        li.classList.add('is-me');
+      }
+      return li;
+    });
+    this.$('board-list').replaceChildren(...items);
+    if (mine) mine.scrollIntoView({ block: 'center' });
+  }
+
+  // ───────── 結算：上傳成績與個人排名 ─────────
+
+  bindSubmit({ onSubmit, onShowBoard }) {
+    this.$('btn-submit-score').addEventListener('click', onSubmit);
+    this.$('nickname').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') onSubmit();
+    });
+    this.$('btn-rank-board').addEventListener('click', onShowBoard);
+  }
+
+  hideSubmit() {
+    this.$('submit').hidden = true;
+    this.$('rank-result').hidden = true;
+  }
+
+  /** 顯示上傳區；reason 有值代表這局不能上傳（只顯示原因） */
+  showSubmit({ trackLabel, nickname, reason = '' }) {
+    this.$('submit').hidden = false;
+    this.$('rank-result').hidden = true;
+    this.$('submit-track').textContent = reason || `這局會記在「${trackLabel}」`;
+    this.$('submit-form').hidden = Boolean(reason);
+    this.$('nickname').value = nickname;
+    this.$('nickname').disabled = false;
+    this.$('btn-submit-score').disabled = false;
+    this.$('btn-submit-score').textContent = '上傳成績';
+    this.setSubmitStatus('');
+  }
+
+  get nicknameValue() {
+    return this.$('nickname').value;
+  }
+
+  focusNickname() {
+    this.$('nickname').focus();
+  }
+
+  setSubmitStatus(text, isError = false) {
+    const el = this.$('submit-status');
+    el.textContent = text;
+    el.style.color = isError ? 'var(--spike)' : '';
+  }
+
+  setSubmitBusy(busy, label) {
+    this.$('btn-submit-score').disabled = busy;
+    this.$('nickname').disabled = busy;
+    if (label) this.$('btn-submit-score').textContent = label;
+  }
+
+  /** 已上傳但排名還沒查到：按鈕改成「重新查詢排名」 */
+  setRankRetry() {
+    this.$('nickname').disabled = true;
+    this.$('btn-submit-score').disabled = false;
+    this.$('btn-submit-score').textContent = '重新查詢排名';
+  }
+
+  showRank({ trackLabel, rank, inTop }) {
+    this.$('submit-form').hidden = true;
+    this.setSubmitStatus('');
+    this.$('rank-line').replaceChildren(`你在${trackLabel}中排名第 `, Object.assign(document.createElement('b'), { textContent: String(rank) }), ' 名！');
+    this.$('rank-sub').textContent = inTop ? '進榜了！你的名字已經在 Top 100 裡。' : '再往上爬一點，就能擠進 Top 100。';
+    this.$('rank-result').hidden = false;
+  }
+
+  // ───────── 死前 10 秒重播 ─────────
+
+  bindReplay({ onMode, onSpeed, onPlay, onDownload }) {
+    for (const btn of document.querySelectorAll('[data-replay-mode]')) {
+      btn.addEventListener('click', () => onMode(btn.dataset.replayMode));
+    }
+    for (const btn of document.querySelectorAll('[data-replay-speed]')) {
+      btn.addEventListener('click', () => onSpeed(Number(btn.dataset.replaySpeed)));
+    }
+    this.$('btn-replay-play').addEventListener('click', onPlay);
+    this.$('btn-replay-download').addEventListener('click', onDownload);
+  }
+
+  showReplay({ hasMic, seconds }) {
+    this.$('replay').hidden = false;
+    this.$('replay-note').textContent = hasMic
+      ? `最後 ${seconds.toFixed(1)} 秒。錄音只在這台裝置，離開結算畫面就會清掉。`
+      : `最後 ${seconds.toFixed(1)} 秒。沒有麥克風錄音，只有遊戲音效可以重播。`;
+    for (const btn of document.querySelectorAll('[data-replay-mode]')) {
+      btn.disabled = !hasMic && btn.dataset.replayMode !== 'B';
+    }
+    this.$('btn-replay-play').disabled = true;
+    this.$('btn-replay-download').disabled = true;
+  }
+
+  hideReplay() {
+    this.$('replay').hidden = true;
+  }
+
+  setReplayBusy(text) {
+    this.$('replay-busy').textContent = text;
+    const busy = Boolean(text);
+    this.$('btn-replay-play').disabled = busy;
+    this.$('btn-replay-download').disabled = busy;
+  }
+
+  setReplayState({ mode, speed, playing }) {
+    for (const btn of document.querySelectorAll('[data-replay-mode]')) {
+      btn.setAttribute('aria-pressed', String(btn.dataset.replayMode === mode));
+    }
+    for (const btn of document.querySelectorAll('[data-replay-speed]')) {
+      btn.setAttribute('aria-pressed', String(Number(btn.dataset.replaySpeed) === speed));
+    }
+    this.$('btn-replay-play').textContent = playing ? '⏹ 停止' : '▶ 播放';
+    this.$('btn-replay-play').disabled = false;
+    this.$('btn-replay-download').disabled = false;
+  }
+}
+
+function formatDate(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// ── main.js ──
+const settings = loadSettings();
+let bests = loadBests();
+sanitizeGameMode(settings, bests);
+let settingsReturnTo = 'title';
+let boardReturnTo = 'title';
+let boardTrack = 'standard';
+let boardToken = 0;
+let boardMine = null; // 剛上傳的成績，用來在榜上標出自己
+// 這一局的排行榜資料：模式在開局時就鎖定，中途換模式的成績不收
+// gyroOnly：整局都用陀螺儀才算體感（中途換過操控方式就當一般按鍵），📱 標章才有意義
+let run = { gameMode: settings.gameMode, gyroOnly: settings.mode === 'gyro' };
+let lastRun = null;
+
+const ui = new UI();
+ui.bindConfirm();
+const viewport = new Viewport(
+  document.getElementById('app'),
+  document.getElementById('stage'),
+  document.getElementById('game'),
+);
+const gyro = new Gyro();
+gyro.maxTilt = settings.gyroTilt;
+const input = new InputManager(viewport.canvas, viewport, gyro);
+input.setMode(settings.mode);
+const renderer = new Renderer(viewport);
+
+// ───────── 音效 ─────────
+
+const audio = new AudioManager();
+audio.enabled = settings.sfx;
+const replay = new ReplayController({ audio, ui });
+
+audio.onMicChange = (state) => ui.setMicStatus(state);
+audio.onClipsChange = () => {
+  for (const id of ALL_SLOT_IDS) ui.setSlotState(id, audio.hasClip(id), audio.clipSeconds(id));
+};
+audio.loadStored();
+
+// iOS / Safari 要在使用者手勢內 resume 才能出聲：任何第一次點擊、觸控或按鍵都先解鎖
+for (const type of ['pointerdown', 'touchend', 'keydown']) {
+  document.addEventListener(type, () => audio.unlock(), { capture: true, passive: true });
+}
+
+const MIC_NOTICE = '僅保留死前10秒於本機，不會上傳。錄音只用在自訂音效與死前重播。要啟用麥克風嗎？';
+
+async function askForMic(message = MIC_NOTICE) {
+  audio.unlock();
+  if (audio.mic.state === 'on') return true;
+  const ok = await ui.confirm(message, { ok: '啟用', cancel: '先不要' });
+  if (!ok) return false;
+  const granted = await audio.enableMic();
+  if (!granted) {
+    ui.toast(
+      audio.mic.state === 'denied'
+        ? '麥克風權限被拒絕，請到瀏覽器的網站設定開啟'
+        : '這個環境無法使用麥克風',
+      3200,
+    );
+  }
+  return granted;
+}
+
+// ───────── 遊戲與 Hooks ─────────
+
+const game = new Game({
+  viewport,
+  renderer,
+  input,
+  gyro,
+  hooks: {
+    onCalibrated(auto) {
+      ui.toast(auto ? '🎯 已自動校正平衡點' : '🎯 已將目前角度設為平衡點');
+    },
+    onHeal() {
+      ui.toast('連踩 15 階，回復 0.5 HP', 1200);
+      audio.play('heal');
+    },
+    onTick: () => audio.play('tick'),
+    onGo: () => audio.play('go'),
+    onSafeLand: (p) => audio.play('safe', p.index, { platform: p, hp: game.player.hp }),
+    onHurt: (src) => audio.play('hurt', game.floor, { platform: src, hp: game.player.hp }),
+    onRunStart: () => audio.beginRun(),
+    onStage: (stage) => ui.toast(`第 ${stage.id} 階段：${stage.name}`, 2200),
+    onEndgame: () => ui.toast(`B${FX.ENDGAME_FLOOR}！終極平台登場：雷射與幻影`, 2600),
+    onFx: (name, p) => audio.play(name === 'spring' ? 'jump' : name === 'portal' ? 'heal' : 'tick', p ? p.index : 0),
+    // 只有「遊玩中」才錄：暫停與倒數不佔用那 10 秒
+    onState: (state) => audio.setCapturing(settings.deathReplay && state === 'playing'),
+    onGameOver(floor) {
+      const snap = settings.deathReplay ? audio.freeze() : null;
+      const hadHell = isNightmareUnlocked(bests);
+      const hadVoice = isVoicePackUnlocked(bests);
+      const prevBest = bests[run.gameMode] || 0;
+      if (floor > prevBest) {
+        bests[run.gameMode] = floor;
+        saveBests(bests);
+      }
+      ui.setPlayingHud(false, false);
+      prepareSubmit(floor);
+      ui.$('over-floor').textContent = `B${floor}F`;
+      const gm = gameModeById(run.gameMode);
+      ui.$('over-best').textContent = floor > prevBest && floor > 0 ? `${gm.name}新紀錄！` : `${gm.name}最佳紀錄 B${bests[run.gameMode]}F`;
+      refreshBest();
+      if (!hadVoice && isVoicePackUnlocked(bests)) {
+        syncVoice();
+        ui.toast(`🎙️ 自訂語音包解鎖了！到設定裡錄你的踩踏音效`, 3200);
+      }
+      if (!hadHell && isNightmareUnlocked(bests)) {
+        ui.$('over-best').textContent += '　🔥 地獄模式解鎖了！';
+        ui.toast('🔥 地獄模式解鎖了！到設定裡選擇', 3200);
+      }
+      audio.play('over');
+      setTimeout(() => {
+        ui.show('over');
+        replay.prepare(snap, `B${floor}F`);
+      }, 450);
+    },
+  },
+});
+game.autoCalibrate = settings.autoCalibrate;
+
+/** 重畫設定選單與主選單上跟遊戲模式、解鎖狀態有關的部分 */
+function syncUi(lockGameMode = false) {
+  ui.syncSettings(settings, { bests, lockGameMode });
+  ui.setBoardLocks(isNightmareUnlocked(bests) ? [] : ['nightmare']);
+  syncVoice();
+}
+
+/** 最高紀錄 B30 以上才開放自訂語音包：沒解鎖時不播自訂錄音、也不能錄 */
+function syncVoice() {
+  const unlocked = isVoicePackUnlocked(bests);
+  audio.voiceUnlocked = unlocked;
+  ui.setVoiceLock(unlocked, bestOverall(bests), AUDIO.VOICE_UNLOCK_FLOOR);
+}
+
+function refreshBest() {
+  ui.setBest(bests[settings.gameMode] || 0);
+}
+
+syncUi();
+refreshBest();
+ui.setMicStatus('off');
+ui.show('title');
+
+// ───────── 陀螺儀權限 ─────────
+
+function showGyroDenied() {
+  ui.setGyroStatus(GYRO_MESSAGES.denied);
+  ui.toast(GYRO_MESSAGES.denied, 4200);
+}
+
+/** 必須在點擊事件中同步呼叫，iOS 才會跳出權限視窗 */
+function ensureGyroPermission() {
+  return gyro.requestPermission().then((state) => {
+    if (state === 'denied') showGyroDenied();
+    else if (state === 'unsupported') {
+      ui.setGyroStatus(GYRO_MESSAGES.unsupported);
+      ui.toast(GYRO_MESSAGES.unsupported, 3200);
+    } else ui.setGyroStatus(gyro.needsPermission ? '已取得陀螺儀權限。' : '');
+    return state;
+  });
+}
+
+/** 在設定裡切到陀螺儀模式：還沒授權就立刻要，被拒絕過就直接提示怎麼開 */
+function onGyroModeSelected() {
+  if (gyro.permission === 'denied') {
+    showGyroDenied();
+    return;
+  }
+  if (gyro.permission !== 'granted') ensureGyroPermission();
+}
+
+function warnIfNoGyroSignal() {
+  setTimeout(() => {
+    const active = game.state === 'countdown' || game.state === 'playing';
+    if (active && input.mode === 'gyro' && gyro.permission === 'granted' && !gyro.hasSignal) {
+      ui.toast('沒有收到陀螺儀訊號（電腦或內嵌預覽無法使用），可先用鍵盤 ← → 測試', 3600);
+    }
+  }, 2200);
+}
+
+// ───────── 流程 ─────────
+
+function startGame() {
+  audio.unlock();
+  sanitizeGameMode(settings, bests);
+  run = { gameMode: settings.gameMode, gyroOnly: settings.mode === 'gyro' };
+  game.gameMode = run.gameMode;
+  lastRun = null;
+  ui.hideSubmit();
+  if (settings.deathReplay) audio.enableMicIfGranted();
+  replay.reset();
+  const gyroMode = settings.mode === 'gyro';
+  if (gyroMode) ensureGyroPermission();
+  ui.show(null);
+  ui.setPlayingHud(true, gyroMode);
+  game.start();
+  if (gyroMode) warnIfNoGyroSignal();
+}
+
+function pauseGame() {
+  if (!game.pause()) return;
+  ui.$('pause-floor').textContent = `B${game.floor}F`;
+  ui.show('pause');
+}
+
+/** 繼續之前先倒數 3、2、1（由 Game.resume 處理），讓玩家有時間調整姿勢 */
+function resumeGame() {
+  ui.show(null);
+  game.resume();
+}
+
+function openSettings(from) {
+  audio.unlock();
+  settingsReturnTo = from;
+  syncUi(from === 'pause');
+  ui.show('settings');
+}
+
+function closeSettings() {
+  saveSettings(settings);
+  refreshBest();
+  if (settingsReturnTo === 'pause') {
+    ui.setPlayingHud(true, settings.mode === 'gyro');
+    ui.show('pause');
+  } else {
+    ui.show('title');
+  }
+}
+
+function backToMenu() {
+  replay.reset();
+  ui.hideSubmit();
+  game.toMenu();
+  ui.setPlayingHud(false, false);
+  ui.show('title');
+}
+
+async function restartGame() {
+  const ok = await ui.confirm('確定要重新開始嗎？目前的層數將會重置！', { ok: '重新開始', cancel: '取消' });
+  if (ok) startGame();
+}
+
+// ───────── 排行榜 ─────────
+
+function openLeaderboard(from, trackId) {
+  boardReturnTo = from;
+  ui.show('leaderboard');
+  loadBoard(trackId || boardTrack);
+}
+
+function closeLeaderboard() {
+  ui.show(boardReturnTo);
+}
+
+async function loadBoard(trackId) {
+  boardTrack = trackId;
+  const token = ++boardToken;
+  ui.setBoardTab(trackId);
+  if (trackId === 'nightmare' && !isNightmareUnlocked(bests)) {
+    const top = Math.max(bests.standard, bests.turbo);
+    ui.setBoardStatus(`🔒 地獄賽道還沒解鎖。標準或極速模式打到 B${CONFIG.NIGHTMARE_UNLOCK_FLOOR}F 就會開放（你目前最高 B${top}F）。`);
+    return;
+  }
+  ui.setBoardStatus('載入中…');
+  try {
+    const rows = await fetchTop(trackId);
+    if (token !== boardToken) return;
+    const mine = boardMine && boardMine.track === trackId ? boardMine : null;
+    ui.renderBoard(rows, (row) => Boolean(mine) && row.player_name === mine.name && row.score === mine.score);
+  } catch (err) {
+    if (token !== boardToken) return;
+    ui.setBoardStatus(`連不上排行榜。${describeError(err)}`, { retry: true });
+  }
+}
+
+/** 結算：這局能不能上傳、記在哪個賽道 */
+function prepareSubmit(floor) {
+  const track = trackOfMode(run.gameMode);
+  const gm = gameModeById(run.gameMode);
+  lastRun = { floor, track, submitted: false, name: '' };
+  const reason = floor < 1 ? '至少要下到 B1F 才能上傳成績。' : '';
+  const how = run.gyroOnly ? '📱 體感' : '按鍵 / 點擊';
+  ui.showSubmit({ trackLabel: `${track.label}（${gm.name} ${gm.badge}・${how}）`, nickname: settings.nickname, reason });
+}
+
+async function showRankFor(entry) {
+  ui.setSubmitBusy(true, '查詢排名中…');
+  try {
+    const rank = await fetchRank(entry.track.id, entry.floor);
+    ui.showRank({ trackLabel: entry.track.label, rank, inTop: rank <= TOP_LIMIT });
+  } catch (err) {
+    ui.setSubmitStatus(`成績已上傳，但查不到排名。${describeError(err)}`, true);
+    ui.setRankRetry();
+  }
+}
+
+async function submitRun() {
+  const entry = lastRun;
+  if (!entry) return;
+  if (entry.submitted) {
+    showRankFor(entry);
+    return;
+  }
+  const name = cleanName(ui.nicknameValue);
+  if (!name) {
+    ui.setSubmitStatus('請先輸入暱稱。', true);
+    ui.focusNickname();
+    return;
+  }
+  ui.setSubmitStatus('');
+  ui.setSubmitBusy(true, '上傳中…');
+  try {
+    await submitScore({ name, score: entry.floor, mode: run.gameMode, inputType: run.gyroOnly ? 'gyro' : 'button' });
+  } catch (err) {
+    ui.setSubmitBusy(false, '上傳成績');
+    ui.setSubmitStatus(`上傳失敗。${describeError(err)}`, true);
+    return;
+  }
+  entry.submitted = true;
+  entry.name = name;
+  settings.nickname = name;
+  saveSettings(settings);
+  boardMine = { name, score: entry.floor, track: entry.track.id };
+  await showRankFor(entry);
+}
+
+const on = (id, fn) => ui.$(id).addEventListener('click', fn);
+on('btn-start', startGame);
+on('btn-open-settings', () => openSettings('title'));
+on('btn-open-leaderboard', () => openLeaderboard('title'));
+on('btn-x-leaderboard', closeLeaderboard);
+on('btn-close-settings', closeSettings);
+on('btn-x-settings', closeSettings);
+on('btn-pause', pauseGame);
+on('btn-resume', resumeGame);
+on('btn-x-pause', resumeGame);
+on('btn-restart', restartGame);
+on('btn-pause-settings', () => openSettings('pause'));
+on('btn-pause-menu', backToMenu);
+on('btn-retry', startGame);
+on('btn-over-menu', backToMenu);
+ui.bindLeaderboard({ onTab: loadBoard, onRetry: () => loadBoard(boardTrack) });
+ui.bindSubmit({
+  onSubmit: submitRun,
+  onShowBoard: () => openLeaderboard('over', lastRun ? lastRun.track.id : undefined),
+});
+on('btn-calibrate', () => game.calibrateGyro(false));
+on('btn-recalibrate', () => game.calibrateGyro(false));
+
+// ───────── 設定 ─────────
+
+ui.$('mode-list').addEventListener('change', (e) => {
+  if (e.target.name !== 'mode') return;
+  settings.mode = e.target.value;
+  if (game.state === 'paused') run.gyroOnly = false;
+  input.setMode(settings.mode);
+  syncUi(settingsReturnTo === 'pause');
+  saveSettings(settings);
+  if (settings.mode === 'gyro') onGyroModeSelected();
+  else ui.setGyroStatus('');
+});
+
+ui.$('gamemode-list').addEventListener('change', (e) => {
+  if (e.target.name !== 'gamemode' || !isModeUnlocked(e.target.value, bests)) return;
+  settings.gameMode = e.target.value;
+  saveSettings(settings);
+  syncUi(settingsReturnTo === 'pause');
+  refreshBest();
+});
+
+ui.$('opt-autocal').addEventListener('change', (e) => {
+  settings.autoCalibrate = e.target.checked;
+  game.autoCalibrate = settings.autoCalibrate;
+  saveSettings(settings);
+});
+
+ui.$('opt-tilt').addEventListener('input', (e) => {
+  settings.gyroTilt = Number(e.target.value);
+  gyro.maxTilt = settings.gyroTilt;
+  ui.$('opt-tilt-out').textContent = String(settings.gyroTilt);
+  saveSettings(settings);
+});
+
+ui.$('opt-sfx').addEventListener('change', (e) => {
+  settings.sfx = e.target.checked;
+  audio.enabled = settings.sfx;
+  saveSettings(settings);
+});
+
+ui.$('opt-replay').addEventListener('change', async (e) => {
+  settings.deathReplay = e.target.checked;
+  saveSettings(settings);
+  if (settings.deathReplay && audio.mic.state !== 'on') {
+    await askForMic(`${MIC_NOTICE}\n不啟用的話，重播只會有遊戲音效。`);
+  }
+});
+
+on('btn-mic', async () => {
+  audio.unlock();
+  if (audio.mic.state === 'on') audio.disableMic();
+  else await askForMic();
+});
+
+// ───────── 自訂音效槽位 ─────────
+
+async function beginRecording(id) {
+  audio.unlock();
+  if (audio.mic.state !== 'on') {
+    ui.toast('請先在上方啟用麥克風');
+    return;
+  }
+  if (!audio.startClip(id)) return;
+  ui.setSlotRecording(id, true);
+  const result = await audio.clipDone;
+  ui.setSlotRecording(id, false);
+  ui.setSlotState(id, audio.hasClip(id), audio.clipSeconds(id));
+  if (result.ok) ui.toast(`已儲存（${result.seconds.toFixed(1)} 秒）`);
+  else if (result.reason === 'short') ui.toast('太短了，請按住說話再放開');
+  else ui.toast('錄音失敗，請再試一次');
+}
+
+ui.bindSlots({
+  onRecStart: beginRecording,
+  onRecEnd: (id) => audio.stopClip(id),
+  onPlay: (id) => {
+    audio.unlock().then(() => audio.previewClip(id));
+  },
+  onDelete: (id) => audio.deleteClip(id),
+});
+
+// ───────── 系統事件 ─────────
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) pauseGame();
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' && e.key !== 'p' && e.key !== 'P') return;
+  if (e.key !== 'Escape' && e.target instanceof HTMLInputElement && e.target.type === 'text') return; // 打暱稱時的 p 不是暫停
+  if (ui.confirmOpen) {
+    if (e.key === 'Escape') ui.closeConfirm(false);
+    return;
+  }
+  if (!ui.screens.settings.hidden) {
+    closeSettings();
+    return;
+  }
+  if (!ui.screens.leaderboard.hidden) {
+    closeLeaderboard();
+    return;
+  }
+  if (game.state === 'paused' && !ui.screens.pause.hidden) resumeGame();
+  else pauseGame();
+});
+
+// 開發/測試用：在 console 可用 window.__game 檢查狀態
+window.__game = game;
+window.__audio = audio;
+
+// 自動測試模擬器（autoTest.js）貼到 console 執行時，從這裡拿遊戲的內部類別
+window.__kd = { CONFIG, FX, Kind, KIND_LABEL, GAME_MODES, STAGES, StageManager, PlatformGenerator, World, stepWorld, riseSpeedFor, createPlatform };
+
+})();
+</script>
